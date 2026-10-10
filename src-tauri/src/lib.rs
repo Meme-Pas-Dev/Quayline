@@ -10,6 +10,7 @@ mod platform;
 mod sftp;
 mod ssh;
 mod state;
+mod updates;
 
 use std::time::Duration;
 
@@ -86,6 +87,7 @@ pub fn run() {
         .manage(sftp::SftpManager::default())
         .manage(oidc::OidcState::default())
         .manage(clipboard::SecretClipboard::default())
+        .manage(updates::UpdateState::default())
         .setup(|app| {
             // ~/.local/share/<identifiant>/vault.qlv
             let dir = app.path().app_data_dir()?;
@@ -138,6 +140,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             i18n::set_language,
+            updates::update_check,
+            updates::update_open,
+            updates::update_install,
+            updates::update_restart,
             commands::vault_status,
             commands::vault_create,
             commands::vault_unlock,

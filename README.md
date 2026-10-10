@@ -50,7 +50,15 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 #### Fedora
 
-From the latest [release](https://github.com/Meme-Pas-Dev/quayline/releases), download
+The simplest way is the COPR repository: packages built and signed by Fedora's
+infrastructure, updated with `dnf upgrade` or Discover.
+
+```bash
+sudo dnf copr enable matt-mpd/quayline
+sudo dnf install quayline
+```
+
+Or install the RPM by hand: from the latest [release](https://github.com/Meme-Pas-Dev/quayline/releases), download
 the RPM (`Quayline-X.Y.Z-N.x86_64.rpm`), `SHA256SUMS` and `SHA256SUMS.asc`, then check
 the signature and checksum before installing:
 
@@ -62,7 +70,7 @@ sha256sum -c --ignore-missing SHA256SUMS                    # package checksum
 sudo dnf install ./Quayline-*.x86_64.rpm
 ```
 
-To update, follow the same steps with the new release (`dnf` replaces the previous
+For a manual install, update with the same steps and the new release (`dnf` replaces the previous
 version and keeps the vault).
 
 The Flatpak is checked the same way with `SHA256SUMS.flatpak` and
@@ -173,7 +181,15 @@ Pour signaler une faille : voir [SECURITY.md](SECURITY.md).
 
 #### Fedora
 
-Télécharger depuis la dernière [release](https://github.com/Meme-Pas-Dev/quayline/releases)
+Le plus simple est le dépôt COPR : paquets compilés et signés par l'infrastructure de
+Fedora, mis à jour avec `dnf upgrade` ou Discover.
+
+```bash
+sudo dnf copr enable matt-mpd/quayline
+sudo dnf install quayline
+```
+
+Ou installer le RPM à la main : télécharger depuis la dernière [release](https://github.com/Meme-Pas-Dev/quayline/releases)
 le RPM (`Quayline-X.Y.Z-N.x86_64.rpm`), `SHA256SUMS` et `SHA256SUMS.asc`, puis vérifier
 la signature et l'empreinte avant d'installer :
 
@@ -185,7 +201,7 @@ sha256sum -c --ignore-missing SHA256SUMS                    # empreinte du paque
 sudo dnf install ./Quayline-*.x86_64.rpm
 ```
 
-Pour une mise à jour, même procédure avec la nouvelle release (`dnf` remplace
+Pour une installation manuelle, la mise à jour suit la même procédure avec la nouvelle release (`dnf` remplace
 l'ancienne version et garde le coffre).
 
 Le Flatpak se vérifie de la même façon avec `SHA256SUMS.flatpak` et

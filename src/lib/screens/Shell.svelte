@@ -11,6 +11,7 @@
     closeSession,
     data,
     disconnectSession,
+    handleError,
     openFromSession,
     reconnect,
     reload,
@@ -25,6 +26,10 @@
   import Hosts from "../views/Hosts.svelte";
   import Keychain from "../views/Keychain.svelte";
   import SettingsView from "../views/SettingsView.svelte";
+  import Modal from "../components/Modal.svelte";
+  import { api } from "../api";
+  import { autoCheckForUpdate, update } from "../updates.svelte";
+  import UpdateActions from "../components/UpdateActions.svelte";
 
   let { onlock, onlocked }: { onlock: () => void; onlocked: () => void } = $props();
 
@@ -80,6 +85,23 @@
     }
   }
 
+  // Recherche de mise à jour une fois les réglages du coffre lus ; la première fois,
+  // l'utilisateur choisit (rien n'est envoyé à GitHub avant sa réponse).
+  $effect(() => {
+    if (data.settings?.check_updates) autoCheckForUpdate();
+  });
+  let askUpdates = $derived(data.loaded && data.settings?.check_updates === null);
+
+  async function answerUpdates(enabled: boolean) {
+    if (!data.settings) return;
+    try {
+      data.settings = await api.settingsSave({ ...data.settings, check_updates: enabled });
+    } catch (e) {
+      handleError(e);
+    }
+  }
+  const updateNotice = $derived(update.available && update.available.version !== update.skipped ? update.available : null);
+
   onMount(() => {
     setLockedHandler(onlocked);
     reload();
@@ -131,6 +153,13 @@
 
     <div class="spacer"></div>
 
+    {#if updateNotice}
+      <div class="update-note">
+        <span><Icon name="download" size={15} /> {t("update.available", { version: updateNotice.version })}</span>
+        <UpdateActions compact />
+      </div>
+    {/if}
+
     <button class="nav-item lock" onclick={onlock} title={t("shell.lockTitle", { keys: KEYS.lock })}>
       <Icon name="lock" size={17} />
       <span>{t("shell.lock")}</span>
@@ -160,6 +189,16 @@
     {/each}
   </section>
 </div>
+
+{#if askUpdates}
+  <Modal title={t("update.askTitle")} onclose={() => (askUpdates = false)} width={440}>
+    <p style="color: var(--text-muted)">{t("update.askMessage", { app: APP_NAME })}</p>
+    {#snippet footer()}
+      <button class="btn" onclick={() => answerUpdates(false)}>{t("update.askNo")}</button>
+      <button class="btn primary" onclick={() => answerUpdates(true)}>{t("update.askYes")}</button>
+    {/snippet}
+  </Modal>
+{/if}
 
 {#if menu && menuSession}
   <div class="context-menu" bind:this={menuEl} style:left="{menu.x}px" style:top="{menu.y}px" role="menu">
@@ -368,6 +407,28 @@
   }
   .spacer {
     flex: 1;
+  }
+  .update-note {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 4px 8px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--accent-soft);
+    font-size: 12.5px;
+  }
+  .update-note > span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+  }
+  .update-note :global(.btn) {
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
   }
   .content {
     position: relative;

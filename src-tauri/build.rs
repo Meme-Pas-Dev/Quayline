@@ -13,6 +13,7 @@ fn identity() {
     println!("cargo:rustc-env=APP_NAME={name}");
     println!("cargo:rustc-env=APP_SLUG={slug}");
     println!("cargo:rustc-env=APP_ID={app_id}");
+    println!("cargo:rustc-env=APP_REPOSITORY={}", get("repository"));
     let migrate: Vec<String> = id["migrateFrom"]
         .as_array()
         .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
@@ -63,6 +64,10 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "app_info",
             "set_language",
+            "update_check",
+            "update_open",
+            "update_install",
+            "update_restart",
             "vault_status",
             "vault_create",
             "vault_unlock",

@@ -94,6 +94,9 @@ pub struct Settings {
     pub lock_closes_sessions: bool,
     /// Verrouiller quand la session du bureau se verrouille ou que la machine se met en veille.
     pub lock_on_system_events: bool,
+    /// Rechercher une nouvelle version sur GitHub après le déverrouillage ; `None` tant
+    /// que l'utilisateur n'a pas répondu (question posée après le déverrouillage).
+    pub check_updates: Option<bool>,
 }
 
 impl Default for Settings {
@@ -105,6 +108,7 @@ impl Default for Settings {
             terminal_theme: "night".into(),
             lock_closes_sessions: true,
             lock_on_system_events: true,
+            check_updates: None,
         }
     }
 }

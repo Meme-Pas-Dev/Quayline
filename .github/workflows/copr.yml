@@ -1,0 +1,68 @@
+name: COPR
+
+# Étiquettes de version : envoie les sources à COPR (dépôt matt-mpd/quayline), qui
+# compile et signe le RPM ; les utilisateurs de Fedora le reçoivent avec « dnf upgrade »
+# ou Discover. Uniquement dans le dépôt public (Meme-Pas-Dev/quayline) ; lancement
+# manuel possible (onglet Actions → COPR → Run workflow).
+# Secret COPR_CONFIG : contenu de ~/.config/copr (jeton d'API COPR, à renouveler à
+# son expiration).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  copr:
+    name: Paquet source et build COPR
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/quayline'
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Outils
+        run: dnf install -y --setopt=install_weak_deps=False git tar gzip rpm-build copr-cli
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # Même numéro de build que le RPM des releases (build-info du dépôt public).
+      - name: Paquet source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)
+          if [ -s build-info ]; then build=$(head -n1 build-info); else build=$(git rev-list --count HEAD); fi
+          printf '%s\n%s\n' "$build" "$(git rev-parse --short HEAD)" > build-info
+          top=$HOME/rpmbuild
+          mkdir -p "$top/SOURCES" "$top/SPECS"
+          tar -czf "$top/SOURCES/quayline-$version.tar.gz" --exclude-vcs --exclude=./node_modules \
+            --transform "s|^\.|quayline-$version|" .
+          sed -e "s/@VERSION@/$version/g" -e "s/@BUILD@/$build/g" -e "s/@DATE@/$(LC_ALL=C date -u '+%a %b %d %Y')/" \
+            packaging/copr/quayline.spec > "$top/SPECS/quayline.spec"
+          rpmbuild -bs "$top/SPECS/quayline.spec"
+          ls -l "$top/SRPMS"
+
+      - name: Build COPR
+        shell: bash
+        env:
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+        run: |
+          set -euo pipefail
+          if [[ -z ${COPR_CONFIG:-} ]]; then
+            echo "::error::Secret COPR_CONFIG absent."
+            exit 1
+          fi
+          mkdir -p ~/.config
+          printf '%s\n' "$COPR_CONFIG" > ~/.config/copr
+          chmod 600 ~/.config/copr
+          copr-cli build matt-mpd/quayline ~/rpmbuild/SRPMS/*.src.rpm
+          rm -f ~/.config/copr

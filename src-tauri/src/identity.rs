@@ -7,6 +7,8 @@ pub const NAME: &str = env!("APP_NAME");
 pub const SLUG: &str = env!("APP_SLUG");
 /// Identifiant (dossier de données, trousseau système).
 pub const ID: &str = env!("APP_ID");
+/// Dépôt GitHub public (« propriétaire/nom ») : releases et vérification des mises à jour.
+pub const REPOSITORY: &str = env!("APP_REPOSITORY");
 
 /// Numéro de build (nombre de commits sur la branche) et commit, ou « dev ».
 pub const BUILD: &str = env!("APP_BUILD");

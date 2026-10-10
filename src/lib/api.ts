@@ -75,7 +75,19 @@ export interface Settings {
   terminal_theme: string;
   lock_closes_sessions: boolean;
   lock_on_system_events: boolean;
+  /** null : pas encore demandé. */
+  check_updates: boolean | null;
 }
+
+export interface UpdateInfo {
+  version: string;
+  /** AAAA-MM-JJ */
+  published: string | null;
+  /** Installation possible depuis l'application (macOS). */
+  installable: boolean;
+}
+
+export type InstallProgress = { step: "download"; done: number; total: number } | { step: "verify" } | { step: "install" };
 
 export interface ExportSelection {
   hosts: boolean;
@@ -230,6 +242,14 @@ export interface KnownHost {
 export const api = {
   appInfo: () => invoke<AppInfo>("app_info"),
   setLanguage: (language: string) => invoke<void>("set_language", { language }),
+  updateCheck: () => invoke<UpdateInfo | null>("update_check"),
+  updateOpen: () => invoke<void>("update_open"),
+  updateInstall: (onProgress: (p: InstallProgress) => void) => {
+    const progress = new Channel<InstallProgress>();
+    progress.onmessage = onProgress;
+    return invoke<void>("update_install", { progress });
+  },
+  updateRestart: () => invoke<void>("update_restart"),
   vaultStatus: () => invoke<VaultStatus>("vault_status"),
   vaultCreate: (password: string) => invoke<void>("vault_create", { password }),
   vaultUnlock: (password: string) => invoke<void>("vault_unlock", { password }),

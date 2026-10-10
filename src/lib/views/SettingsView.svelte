@@ -15,7 +15,9 @@
   import { setThemePreference, themePreference, type ThemePreference } from "../appearance";
   import { providerName } from "../oidcProviders";
   import { IS_MAC } from "../platform";
-  import { formatList, languagePreference, setLanguagePreference, t, tn, type LanguagePreference, type MessageKey } from "../i18n/index.svelte";
+  import { checkForUpdate, update } from "../updates.svelte";
+  import UpdateActions from "../components/UpdateActions.svelte";
+  import { formatList, intlLocale, languagePreference, setLanguagePreference, t, tn, type LanguagePreference, type MessageKey } from "../i18n/index.svelte";
 
   // Copie locale éditable ; la valeur enregistrée est publiée dans le store
   // pour que les terminaux ouverts l'appliquent immédiatement.
@@ -35,6 +37,8 @@
   // Noms propres (Dracula, Nord…) gardés tels quels ; « Nuit » et « Jour » traduits.
   const themeLabel = (name: string) => (name.startsWith("theme.") ? t(name as MessageKey) : name);
   const THEMES = Object.entries(TERMINAL_THEMES).map(([id, theme]) => [id, theme.name]);
+
+  const releaseDate = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString(intlLocale(), { dateStyle: "long" });
 
   onMount(async () => {
     api.appInfo().then((i) => (about = i)).catch(() => {});
@@ -286,6 +290,34 @@
         {#if about.flatpak}<span class="badge">Flatpak</span>{/if}
       </p>
       {#if about.commit}<p class="faint">{t("settings.about.commit")} <code>{about.commit}</code></p>{/if}
+      {#if settings}
+        <div class="setting">
+          <div>
+            <strong>{t("update.auto")}</strong>
+            <p>{t("update.autoHint")}</p>
+          </div>
+          <select class="input" bind:value={settings.check_updates} onchange={save}>
+            <option value={true}>{t("common.enabled")}</option>
+            <option value={false}>{t("common.disabled")}</option>
+          </select>
+        </div>
+      {/if}
+      <div class="update-row">
+        <button class="btn" onclick={checkForUpdate} disabled={update.checking || !!update.install}>
+          <Icon name="refresh" size={15} /> {t(update.checking ? "update.checking" : "update.check")}
+        </button>
+        {#if update.available}
+          <span>{update.available.published
+              ? t("update.availableLong", { version: update.available.version, date: releaseDate(update.available.published) })
+              : t("update.availableShort", { version: update.available.version })}</span>
+          <UpdateActions />
+        {/if}
+        {#if update.error}
+          <span class="error-text">{update.error}</span>
+        {:else if !update.available && update.checkedAt}
+          <span class="faint">{t("update.upToDate", { app: about.name })}</span>
+        {/if}
+      </div>
     </section>
   {/if}
 </div>
@@ -328,7 +360,7 @@
     color: var(--text-faint);
     flex-shrink: 0;
   }
-  .about p {
+  .about > p {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -338,6 +370,13 @@
   .about .faint {
     color: var(--text-faint);
     font-size: 12px;
+  }
+  .update-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
   }
   .about code {
     font-family: var(--font-mono);
