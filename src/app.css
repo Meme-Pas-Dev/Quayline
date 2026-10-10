@@ -138,6 +138,9 @@ button {
   border: 1px solid var(--border);
   background: var(--surface-2);
   font-weight: 550;
+  /* Hauteur fixe : le libellé reste sur une ligne (la rangée de boutons passe à la
+     ligne si besoin). */
+  white-space: nowrap;
   /* Jamais d'animation de transform : sous WebKitGTK, chaque animation crée puis
      détruit un calque de composition, ce qui provoque un éclair à l'écran. */
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;

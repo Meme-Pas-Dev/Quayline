@@ -735,7 +735,7 @@
   "err.update.badReply": "Réponse de GitHub inattendue.",
   "err.update.none": "Aucune mise à jour trouvée.",
   "update.askTitle": "Mises à jour",
-  "update.askMessage": "{app} doit-il rechercher une nouvelle version sur GitHub après le déverrouillage ? GitHub voit alors votre adresse IP. Rien n'est installé sans votre accord, et ce choix se modifie dans Réglages → À propos.",
+  "update.askMessage": "{app} doit-il rechercher automatiquement une nouvelle version après le déverrouillage ? Rien n'est installé sans votre accord, et ce choix peut être modifié dans Réglages → À propos.",
   "update.askYes": "Rechercher automatiquement",
   "update.askNo": "Ne pas rechercher",
   "err.update.unsupported": "L'installation depuis l'application n'est pas disponible pour cette version.",

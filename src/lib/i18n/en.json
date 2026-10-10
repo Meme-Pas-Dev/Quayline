@@ -735,7 +735,7 @@
   "err.update.badReply": "Unexpected response from GitHub.",
   "err.update.none": "No update found.",
   "update.askTitle": "Updates",
-  "update.askMessage": "Should {app} check GitHub for a new version after unlocking? GitHub then sees your IP address. Nothing is installed without your consent, and you can change this choice in Settings → About.",
+  "update.askMessage": "Should {app} automatically check for a new version after unlocking? Nothing is installed without your consent, and this choice can be changed in Settings → About.",
   "update.askYes": "Check automatically",
   "update.askNo": "Don't check",
   "err.update.unsupported": "Installing from the application is not available for this version.",
