@@ -38,6 +38,7 @@ use url::Url;
 use zeroize::Zeroizing;
 
 use crate::error::{CmdError, CmdResult};
+use crate::i18n::tr;
 use crate::platform::{keyring, SecretRef};
 use crate::state::AppState;
 
@@ -67,13 +68,21 @@ const PROVIDERS: &[(&str, &str, &[&str])] = &[
         ],
     ),
     ("google", "Google", &["https://www.google.com", "https://google.com"]),
-    ("generic", "votre fournisseur d'identité", &[]),
+    ("generic", "", &[]),
 ];
 
 /// Liaison sans modèle : créée avant les fournisseurs génériques, donc Pocket ID.
 fn provider(id: Option<&str>) -> (&'static str, &'static str, &'static [&'static str]) {
     let id = id.unwrap_or("pocket-id");
     PROVIDERS.iter().copied().find(|(p, _, _)| *p == id).unwrap_or(PROVIDERS[PROVIDERS.len() - 1])
+}
+
+/// Nom affiché du fournisseur, traduit pour le modèle générique.
+fn provider_name(id: Option<&str>) -> String {
+    match provider(id) {
+        ("generic", _, _) => tr!("oidc.genericName"),
+        (_, name, _) => name.into(),
+    }
 }
 
 /// Réglages du client OIDC, à l'activation comme au déverrouillage.
@@ -88,8 +97,8 @@ struct ClientConfig {
 }
 
 impl ClientConfig {
-    fn name(&self) -> &'static str {
-        provider(self.provider.as_deref()).1
+    fn name(&self) -> String {
+        provider_name(self.provider.as_deref())
     }
 }
 
@@ -134,10 +143,10 @@ fn oidc_err(message: impl Into<String>) -> CmdError {
 /// Valide et normalise l'adresse de l'instance : HTTPS obligatoire (HTTP toléré
 /// uniquement en local, pour les tests), sans « / » final, ni requête ni fragment.
 pub fn normalize_issuer(input: &str) -> CmdResult<String> {
-    let url = Url::parse(input.trim()).map_err(|_| oidc_err("Adresse d'instance invalide."))?;
+    let url = Url::parse(input.trim()).map_err(|_| oidc_err(tr!("err.oidc.badIssuer")))?;
     check_endpoint(&url)?;
     if url.query().is_some() || url.fragment().is_some() || !url.username().is_empty() {
-        return Err(oidc_err("L'adresse de l'instance ne doit contenir ni paramètres ni identifiants."));
+        return Err(oidc_err(tr!("err.oidc.issuerExtras")));
     }
     Ok(url.as_str().trim_end_matches('/').to_string())
 }
@@ -150,7 +159,7 @@ fn check_endpoint(url: &Url) -> CmdResult<()> {
     match url.scheme() {
         "https" => Ok(()),
         "http" if is_loopback(url) => Ok(()),
-        _ => Err(oidc_err("Seules les adresses HTTPS sont acceptées.")),
+        _ => Err(oidc_err(tr!("err.oidc.httpsOnly"))),
     }
 }
 
@@ -175,7 +184,7 @@ fn http_client() -> CmdResult<reqwest::Client> {
         .redirect(reqwest::redirect::Policy::none())
         .user_agent(format!("{}/{}", crate::identity::NAME, env!("CARGO_PKG_VERSION")))
         .build()
-        .map_err(|e| oidc_err(format!("Client HTTP indisponible : {e}")))
+        .map_err(|e| oidc_err(tr!("err.oidc.httpClient", detail = e)))
 }
 
 async fn discover(http: &reqwest::Client, issuer: &str) -> CmdResult<Discovery> {
@@ -185,19 +194,19 @@ async fn discover(http: &reqwest::Client, issuer: &str) -> CmdResult<Discovery> 
         .send()
         .await
         .and_then(|r| r.error_for_status())
-        .map_err(|e| oidc_err(format!("Instance injoignable ({url}) : {e}")))?
+        .map_err(|e| oidc_err(tr!("err.oidc.unreachableAt", url = url, detail = e)))?
         .json()
         .await
-        .map_err(|_| oidc_err("Réponse de découverte OIDC invalide : est-ce bien l'adresse d'un fournisseur d'identité ?"))?;
+        .map_err(|_| oidc_err(tr!("err.oidc.badDiscovery")))?;
     // L'issuer annoncé doit être exactement celui configuré (protection contre la substitution).
     if doc.issuer.trim_end_matches('/') != issuer {
-        return Err(oidc_err(format!("L'instance s'annonce comme « {} » au lieu de « {issuer} ».", doc.issuer)));
+        return Err(oidc_err(tr!("err.oidc.issuerMismatch", announced = doc.issuer, issuer = issuer)));
     }
     for endpoint in [&doc.authorization_endpoint, &doc.token_endpoint, &doc.jwks_uri]
         .into_iter()
         .chain(doc.device_authorization_endpoint.as_ref())
     {
-        check_endpoint(&Url::parse(endpoint).map_err(|_| oidc_err("Point de terminaison OIDC invalide."))?)?;
+        check_endpoint(&Url::parse(endpoint).map_err(|_| oidc_err(tr!("err.oidc.badEndpoint")))?)?;
     }
     Ok(doc)
 }
@@ -294,8 +303,8 @@ impl BrowserReply {
 
     async fn send(mut self, error: Option<&CmdError>, success: &str) {
         let body = match error {
-            None => page(true, "Connexion réussie", &escape(success)),
-            Some(e) => page(false, "Accès refusé", &escape(&e.message)),
+            None => page(true, &tr!("oidc.page.success"), &escape(success)),
+            Some(e) => page(false, &tr!("oidc.page.denied"), &escape(&e.message)),
         };
         let _ = self.stream.write_all(body.as_bytes()).await;
         bring_to_front(&self.app);
@@ -316,10 +325,10 @@ async fn authenticate(app: &AppHandle, cfg: &ClientConfig) -> CmdResult<(Identit
     let redirect = redirect_uri(port);
 
     let listener = TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| {
-        oidc_err(format!("Port {port} indisponible pour le retour du navigateur ({e}). Choisissez-en un autre."))
+        oidc_err(tr!("err.oidc.portUnavailable", port = port, detail = e))
     })?;
 
-    let mut auth_url = Url::parse(&doc.authorization_endpoint).map_err(|_| oidc_err("URL d'autorisation invalide."))?;
+    let mut auth_url = Url::parse(&doc.authorization_endpoint).map_err(|_| oidc_err(tr!("err.oidc.badAuthUrl")))?;
     auth_url
         .query_pairs_mut()
         .append_pair("response_type", "code")
@@ -339,13 +348,14 @@ async fn authenticate(app: &AppHandle, cfg: &ClientConfig) -> CmdResult<(Identit
         .await
         .ok()
         .and_then(|r| r.ok())
-        .ok_or_else(|| oidc_err("Impossible d'ouvrir le navigateur."))?;
+        .ok_or_else(|| oidc_err(tr!("err.oidc.browser")))?;
 
+    let name = cfg.name();
     let (code, stream) = tokio::select! {
-        r = tokio::time::timeout(LOGIN_TIMEOUT, wait_for_callback(&listener, &state, cfg.name())) => {
-            r.map_err(|_| oidc_err(format!("Délai dépassé : aucune réponse de {}.", cfg.name())))??
+        r = tokio::time::timeout(LOGIN_TIMEOUT, wait_for_callback(&listener, &state, &name)) => {
+            r.map_err(|_| oidc_err(tr!("err.oidc.timeout", provider = name)))??
         }
-        _ = cancel_rx => return Err(CmdError::new("cancelled", "Authentification annulée.")),
+        _ = cancel_rx => return Err(CmdError::new("cancelled", tr!("err.oidc.cancelled"))),
     };
     drop(listener);
     let reply = BrowserReply { stream, app: app.clone() };
@@ -384,20 +394,20 @@ async fn exchange_code(
         .form(&form)
         .send()
         .await
-        .map_err(|e| oidc_err(format!("Échange du code impossible : {e}")))?;
+        .map_err(|e| oidc_err(tr!("err.oidc.codeExchange", detail = e)))?;
     if !response.status().is_success() {
         let detail = response.json::<TokenError>().await.ok().map(|e| e.error_description.unwrap_or(e.error));
-        return Err(oidc_err(format!(
-            "Échange du code refusé par {}{}.",
-            cfg.name(),
-            detail.map(|d| format!(" ({d})")).unwrap_or_default()
+        return Err(oidc_err(tr!(
+            "err.oidc.codeExchangeRefused",
+            provider = cfg.name(),
+            detail = detail.map(|d| format!(" ({d})")).unwrap_or_default()
         )));
     }
-    let tokens: TokenResponse = response.json().await.map_err(|_| oidc_err("Réponse de jeton invalide."))?;
+    let tokens: TokenResponse = response.json().await.map_err(|_| oidc_err(tr!("err.oidc.badToken")))?;
 
     let claims = verify_id_token(http, doc, &cfg.client_id, &tokens.id_token).await?;
     if claims.nonce.as_deref() != Some(nonce) {
-        return Err(oidc_err("Jeton rejeté : nonce inattendu (rejeu possible)."));
+        return Err(oidc_err(tr!("err.oidc.nonceReplay")));
     }
     Ok(claims.into_identity(&cfg.groups_claim))
 }
@@ -434,7 +444,7 @@ pub struct QrMatrix {
 }
 
 fn qr_matrix(data: &str) -> CmdResult<QrMatrix> {
-    let code = qrcode::QrCode::new(data.as_bytes()).map_err(|_| oidc_err("QR code impossible à générer."))?;
+    let code = qrcode::QrCode::new(data.as_bytes()).map_err(|_| oidc_err(tr!("err.oidc.qr")))?;
     Ok(QrMatrix {
         size: code.width(),
         modules: code.to_colors().into_iter().map(|c| c == qrcode::Color::Dark).collect(),
@@ -457,14 +467,14 @@ pub struct DeviceStart {
 /// du fournisseur, comme microsoft.com pour Entra) : un QR code ne doit jamais envoyer
 /// le téléphone ailleurs.
 fn check_verification_uri(uri: &str, cfg: &ClientConfig) -> CmdResult<Url> {
-    let url = Url::parse(uri).map_err(|_| oidc_err("Adresse de validation invalide."))?;
+    let url = Url::parse(uri).map_err(|_| oidc_err(tr!("err.oidc.badVerification")))?;
     check_endpoint(&url)?;
-    let issuer = Url::parse(&cfg.issuer).map_err(|_| oidc_err("Adresse d'instance invalide."))?;
+    let issuer = Url::parse(&cfg.issuer).map_err(|_| oidc_err(tr!("err.oidc.badIssuer")))?;
     let known = provider(cfg.provider.as_deref()).2;
     let allowed = url.origin() == issuer.origin()
         || known.iter().any(|o| Url::parse(o).is_ok_and(|o| o.origin() == url.origin()));
     if !allowed {
-        return Err(oidc_err(format!("L'adresse de validation n'appartient pas à {}.", cfg.name())));
+        return Err(oidc_err(tr!("err.oidc.foreignVerification", provider = cfg.name())));
     }
     Ok(url)
 }
@@ -472,7 +482,7 @@ fn check_verification_uri(uri: &str, cfg: &ClientConfig) -> CmdResult<Url> {
 /// Code court affiché : quelques caractères lisibles, rien d'autre.
 fn check_user_code(code: &str) -> CmdResult<()> {
     if code.is_empty() || code.len() > 32 || !code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
-        return Err(oidc_err("Code de connexion invalide reçu de l'instance."));
+        return Err(oidc_err(tr!("err.oidc.badUserCode")));
     }
     Ok(())
 }
@@ -491,10 +501,10 @@ async fn poll_device(app: &AppHandle, flow: &mut DeviceFlow) -> CmdResult<Identi
     loop {
         tokio::select! {
             _ = tokio::time::sleep(flow.interval) => {}
-            _ = &mut cancel_rx => return Err(CmdError::new("cancelled", "Authentification annulée.")),
+            _ = &mut cancel_rx => return Err(CmdError::new("cancelled", tr!("err.oidc.cancelled"))),
         }
         if Instant::now() >= flow.deadline {
-            return Err(oidc_err("Code expiré : relancez la connexion par téléphone."));
+            return Err(oidc_err(tr!("err.oidc.expired")));
         }
         let mut form = vec![
             ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
@@ -508,26 +518,26 @@ async fn poll_device(app: &AppHandle, flow: &mut DeviceFlow) -> CmdResult<Identi
         // Coupure réseau passagère : on réessaie au prochain intervalle.
         let Ok(response) = response else { continue };
         if response.status().is_success() {
-            let tokens: TokenResponse = response.json().await.map_err(|_| oidc_err("Réponse de jeton invalide."))?;
+            let tokens: TokenResponse = response.json().await.map_err(|_| oidc_err(tr!("err.oidc.badToken")))?;
             let claims = verify_id_token(&http, &flow.doc, &flow.cfg.client_id, &tokens.id_token).await?;
             // Le jeton vient directement de l'instance, en échange du code de l'appareil :
             // le nonce n'est pas exigé (RFC 8628), mais vérifié s'il est renvoyé.
             if claims.nonce.as_deref().is_some_and(|n| n != flow.nonce) {
-                return Err(oidc_err("Jeton rejeté : nonce inattendu."));
+                return Err(oidc_err(tr!("err.oidc.nonce")));
             }
             return Ok(claims.into_identity(&flow.cfg.groups_claim));
         }
-        let error: TokenError = response.json().await.map_err(|_| oidc_err("Réponse de l'instance invalide."))?;
+        let error: TokenError = response.json().await.map_err(|_| oidc_err(tr!("err.oidc.badReply")))?;
         match error.error.as_str() {
             "authorization_pending" => {}
             "slow_down" => flow.interval += Duration::from_secs(5),
-            "access_denied" => return Err(oidc_err("Connexion refusée sur le téléphone.")),
-            "expired_token" => return Err(oidc_err("Code expiré : relancez la connexion par téléphone.")),
+            "access_denied" => return Err(oidc_err(tr!("err.oidc.phoneDenied"))),
+            "expired_token" => return Err(oidc_err(tr!("err.oidc.expired"))),
             other => {
-                return Err(oidc_err(format!(
-                    "Connexion refusée par {} : {}",
-                    flow.cfg.name(),
-                    error.error_description.as_deref().unwrap_or(other)
+                return Err(oidc_err(tr!(
+                    "err.oidc.refusedBy",
+                    provider = flow.cfg.name(),
+                    detail = error.error_description.as_deref().unwrap_or(other)
                 )))
             }
         }
@@ -552,7 +562,7 @@ async fn verify_id_token(
     client_id: &str,
     token: &str,
 ) -> CmdResult<IdClaims> {
-    let header = jsonwebtoken::decode_header(token).map_err(|_| oidc_err("Jeton d'identité illisible."))?;
+    let header = jsonwebtoken::decode_header(token).map_err(|_| oidc_err(tr!("err.oidc.unreadableToken")))?;
     // Jamais de « none » ni de HMAC (clé symétrique) : signatures asymétriques uniquement.
     const ALLOWED: [Algorithm; 9] = [
         Algorithm::RS256,
@@ -566,24 +576,24 @@ async fn verify_id_token(
         Algorithm::EdDSA,
     ];
     if !ALLOWED.contains(&header.alg) {
-        return Err(oidc_err(format!("Algorithme de signature refusé : {:?}.", header.alg)));
+        return Err(oidc_err(tr!("err.oidc.algorithm", alg = format!("{:?}", header.alg))));
     }
     let jwks: JwkSet = http
         .get(&doc.jwks_uri)
         .send()
         .await
         .and_then(|r| r.error_for_status())
-        .map_err(|e| oidc_err(format!("Clés publiques de l'instance injoignables : {e}")))?
+        .map_err(|e| oidc_err(tr!("err.oidc.jwksUnreachable", detail = e)))?
         .json()
         .await
-        .map_err(|_| oidc_err("Clés publiques de l'instance invalides."))?;
+        .map_err(|_| oidc_err(tr!("err.oidc.badJwks")))?;
     let jwk = match &header.kid {
         Some(kid) => jwks.find(kid),
         None if jwks.keys.len() == 1 => jwks.keys.first(),
         None => None,
     }
-    .ok_or_else(|| oidc_err("Clé de signature du jeton introuvable."))?;
-    let key = DecodingKey::from_jwk(jwk).map_err(|_| oidc_err("Clé de signature inutilisable."))?;
+    .ok_or_else(|| oidc_err(tr!("err.oidc.keyNotFound")))?;
+    let key = DecodingKey::from_jwk(jwk).map_err(|_| oidc_err(tr!("err.oidc.badKey")))?;
 
     let mut validation = Validation::new(header.alg);
     // L'issuer tel qu'annoncé (déjà comparé à celui configuré) : certains fournisseurs,
@@ -594,7 +604,7 @@ async fn verify_id_token(
     validation.leeway = 60;
     jsonwebtoken::decode::<IdClaims>(token, &key, &validation)
         .map(|d| d.claims)
-        .map_err(|e| oidc_err(format!("Jeton d'identité rejeté : {e}.")))
+        .map_err(|e| oidc_err(tr!("err.oidc.tokenRejected", detail = e)))
 }
 
 
@@ -612,7 +622,7 @@ const LOGO: &str = "<svg viewBox=\"0 0 64 64\" width=\"56\" height=\"56\" aria-h
 fn page(success: bool, title: &str, message: &str) -> String {
     let (mark, color) = if success { ("✓", "#3ddc97") } else { ("✕", "#ff6b81") };
     let html = format!(
-        "<!doctype html><html lang=\"fr\"><meta charset=\"utf-8\">\
+        "<!doctype html><html lang=\"{lang}\"><meta charset=\"utf-8\">\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{name}</title>\
          <style>:root{{color-scheme:light dark;--bg:#0d0f14;--card:#171a23;--border:#262b3a;--text:#e6e8ef;\
          --muted:#9097ab}}@media (prefers-color-scheme:light){{:root{{--bg:#f4f5f9;--card:#fff;--border:#e1e4ec;\
@@ -626,7 +636,8 @@ fn page(success: bool, title: &str, message: &str) -> String {
          margin-bottom:12px}}h1{{font-size:20px;margin:0 0 8px}}p{{color:var(--muted);margin:0;\
          line-height:1.5}}</style><main><div class=\"brand\">{LOGO}<span>{name}</span></div>\
          <div class=\"mark\">{mark}</div><h1>{title}</h1><p>{message}</p></main></html>",
-        name = crate::identity::NAME
+        name = crate::identity::NAME,
+        lang = crate::i18n::language()
     );
     format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Security-Policy: default-src 'none'; \
@@ -664,14 +675,14 @@ async fn wait_for_callback(
         let params: HashMap<String, String> = url.query_pairs().into_owned().collect();
         if params.get("state").map(String::as_str) != Some(expected_state) {
             // Requête forgée ou ancienne : ignorée, on continue d'attendre la bonne.
-            let refused = page(false, "Requête refusée", "Cette page ne correspond à aucune connexion en cours.");
+            let refused = page(false, &tr!("oidc.page.requestRefused"), &tr!("oidc.page.requestRefusedHint"));
             let _ = stream.write_all(refused.as_bytes()).await;
             continue;
         }
         if let Some(error) = params.get("error") {
             let detail = params.get("error_description").unwrap_or(error);
-            let _ = stream.write_all(page(false, "Connexion refusée", &escape(detail)).as_bytes()).await;
-            return Err(oidc_err(format!("Authentification refusée par {provider_name} : {detail}")));
+            let _ = stream.write_all(page(false, &tr!("oidc.page.refused"), &escape(detail)).as_bytes()).await;
+            return Err(oidc_err(tr!("err.oidc.authRefusedBy", provider = provider_name, detail = detail)));
         }
         if let Some(code) = params.get("code") {
             // Réponse différée : voir BrowserReply.
@@ -695,7 +706,7 @@ fn keyring_label(binding: &OidcBinding) -> String {
         Some("generic") => "OIDC",
         other => provider(other).1,
     };
-    format!("{} — déverrouillage {name}", crate::identity::NAME)
+    tr!("oidc.keyringLabel", app = crate::identity::NAME, provider = name)
 }
 
 async fn keyring_store(binding: &OidcBinding, key: &[u8; 32]) -> CmdResult<()> {
@@ -704,10 +715,10 @@ async fn keyring_store(binding: &OidcBinding, key: &[u8; 32]) -> CmdResult<()> {
 
 async fn keyring_load(binding: &OidcBinding) -> CmdResult<Zeroizing<[u8; 32]>> {
     let secret = keyring::load(&keyring_label(binding), &secret_ref(binding)).await.map_err(oidc_err)?.ok_or_else(|| {
-        oidc_err("Clé de déverrouillage absente du trousseau système : réactivez le fournisseur d'identité dans les réglages.")
+        oidc_err(tr!("err.oidc.keyMissing"))
     })?;
     if secret.len() != 32 {
-        return Err(oidc_err("Clé de déverrouillage corrompue dans le trousseau système."));
+        return Err(oidc_err(tr!("err.oidc.keyCorrupt")));
     }
     let mut key = Zeroizing::new([0u8; 32]);
     key.copy_from_slice(&secret);
@@ -765,7 +776,7 @@ impl From<&OidcBinding> for OidcStatus {
 fn account_name(display_name: &str) -> String {
     match display_name.rsplit_once(" <") {
         Some((name, rest)) if rest.ends_with('>') && rest.contains('@') && !name.trim().is_empty() => name.trim().into(),
-        _ if display_name.contains('@') && !display_name.contains(' ') => "Compte lié".into(),
+        _ if display_name.contains('@') && !display_name.contains(' ') => tr!("oidc.linkedAccount"),
         _ => display_name.into(),
     }
 }
@@ -802,10 +813,10 @@ pub struct EnrollInput {
 fn normalize_scopes(input: &str) -> CmdResult<String> {
     let scopes: Vec<&str> = input.split_whitespace().collect();
     if !scopes.contains(&"openid") {
-        return Err(oidc_err("Les scopes doivent contenir « openid »."));
+        return Err(oidc_err(tr!("err.oidc.scopesOpenid")));
     }
     if scopes.iter().any(|s| !s.chars().all(|c| c.is_ascii_graphic() && c != '"' && c != '\\')) {
-        return Err(oidc_err("Scopes invalides."));
+        return Err(oidc_err(tr!("err.oidc.badScopes")));
     }
     Ok(scopes.join(" "))
 }
@@ -815,16 +826,16 @@ fn config_from_input(input: EnrollInput) -> CmdResult<(ClientConfig, Option<Stri
     let provider_id = input.provider.map(|p| p.trim().to_string()).filter(|p| !p.is_empty());
     if let Some(id) = &provider_id {
         if !PROVIDERS.iter().any(|(p, _, _)| p == id) {
-            return Err(oidc_err("Fournisseur d'identité inconnu."));
+            return Err(oidc_err(tr!("err.oidc.unknownProvider")));
         }
     }
     let issuer = normalize_issuer(&input.issuer)?;
     let client_id = input.client_id.trim().to_string();
     if client_id.is_empty() || client_id.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return Err(oidc_err("Client ID invalide."));
+        return Err(oidc_err(tr!("err.oidc.badClientId")));
     }
     if input.redirect_port < 1024 {
-        return Err(oidc_err("Choisissez un port entre 1024 et 65535."));
+        return Err(oidc_err(tr!("err.oidc.badPort")));
     }
     let required_group = input.required_group.map(|g| g.trim().to_string()).filter(|g| !g.is_empty());
     let scopes = match input.scopes.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
@@ -837,17 +848,17 @@ fn config_from_input(input: EnrollInput) -> CmdResult<(ClientConfig, Option<Stri
         .filter(|c| !c.is_empty())
         .unwrap_or_else(|| DEFAULT_GROUPS_CLAIM.into());
     if groups_claim.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return Err(oidc_err("Nom de la donnée des groupes invalide."));
+        return Err(oidc_err(tr!("err.oidc.badGroupsClaim")));
     }
     let client_secret = input
         .client_secret
         .map(|s| Zeroizing::new(s.expose().trim().to_string()))
         .filter(|s| !s.is_empty());
     if client_secret.as_ref().is_some_and(|s| s.chars().any(char::is_control)) {
-        return Err(oidc_err("Secret client invalide."));
+        return Err(oidc_err(tr!("err.oidc.badSecret")));
     }
     if provider_id.as_deref() == Some("google") && client_secret.is_none() {
-        return Err(oidc_err("Google exige le secret client de l'application de bureau."));
+        return Err(oidc_err(tr!("err.oidc.googleSecret")));
     }
     let cfg = ClientConfig {
         provider: provider_id,
@@ -868,11 +879,9 @@ fn check_group(identity: &Identity, required: Option<&str>) -> CmdResult<()> {
         return Ok(());
     }
     if identity.groups_overage {
-        return Err(oidc_err(
-            "Le compte appartient à trop de groupes pour que le jeton les transmette : limitez les groupes envoyés à l'application.",
-        ));
+        return Err(oidc_err(tr!("err.oidc.groupsOverage")));
     }
-    Err(oidc_err(format!("Le compte {} n'appartient pas au groupe « {group} ».", identity.display())))
+    Err(oidc_err(tr!("err.oidc.notInGroup", account = identity.display(), group = group)))
 }
 
 /// Active le déverrouillage par un fournisseur d'identité (mot de passe maître exigé).
@@ -885,7 +894,7 @@ pub async fn oidc_enroll(app: AppHandle, input: EnrollInput, password: Secret) -
 
     let (identity, reply) = authenticate(&app, &cfg).await?;
     let result = bind_identity(&app, &cfg, required_group, &identity).await;
-    let done = format!("Le déverrouillage par {} est activé. Vous pouvez fermer cet onglet.", cfg.name());
+    let done = tr!("oidc.page.enrolled", provider = cfg.name());
     reply.finish(&result, &done).await;
     result.map(|()| identity)
 }
@@ -948,7 +957,7 @@ pub async fn oidc_disable(app: AppHandle) -> CmdResult<()> {
 fn stored_binding(app: &AppHandle) -> CmdResult<OidcBinding> {
     let state = app.state::<AppState>();
     let (_, binding) = Vault::oidc_binding(&state.vault_path)?
-        .ok_or_else(|| oidc_err("Aucun fournisseur d'identité n'est activé pour ce coffre."))?;
+        .ok_or_else(|| oidc_err(tr!("err.oidc.notEnabled")))?;
     // Pas encore authentifiée : si elle a été modifiée, le slot refusera de s'ouvrir
     // (données authentifiées), même avec la clé du trousseau.
     normalize_issuer(&binding.issuer)?;
@@ -962,7 +971,7 @@ pub async fn oidc_unlock(app: AppHandle) -> CmdResult<()> {
     let binding = stored_binding(&app)?;
     let (identity, reply) = authenticate(&app, &ClientConfig::from(&binding)).await?;
     let result = finish_unlock(&app, binding, identity).await;
-    let done = format!("{} est déverrouillé. Vous pouvez fermer cet onglet.", crate::identity::NAME);
+    let done = tr!("oidc.page.unlocked", app = crate::identity::NAME);
     reply.finish(&result, &done).await;
     result
 }
@@ -971,12 +980,9 @@ pub async fn oidc_unlock(app: AppHandle) -> CmdResult<()> {
 /// avec la clé du trousseau système.
 async fn finish_unlock(app: &AppHandle, binding: OidcBinding, identity: Identity) -> CmdResult<()> {
     let state = app.state::<AppState>();
-    let name = provider(binding.provider.as_deref()).1;
+    let name = provider_name(binding.provider.as_deref());
     if identity.subject != binding.subject {
-        return Err(oidc_err(format!(
-            "Le compte « {} » n'est pas celui qui a été lié à ce coffre ({name}).",
-            identity.display()
-        )));
+        return Err(oidc_err(tr!("err.oidc.wrongAccount", account = identity.display(), provider = name)));
     }
     check_group(&identity, binding.required_group.as_deref())?;
 
@@ -984,11 +990,9 @@ async fn finish_unlock(app: &AppHandle, binding: OidcBinding, identity: Identity
     let path = state.vault_path.clone();
     let vault = tauri::async_runtime::spawn_blocking(move || Vault::unlock_with_oidc_key(path, &binding, &key))
         .await
-        .map_err(|_| CmdError::new("internal", "Tâche interrompue."))?
+        .map_err(|_| CmdError::new("internal", tr!("err.interrupted")))?
         .map_err(|e| match e {
-            vault::Error::InvalidCredentials => oidc_err(
-                "La clé du trousseau ne correspond pas au coffre (configuration modifiée ?). Utilisez le mot de passe maître puis réactivez le fournisseur d'identité.",
-            ),
+            vault::Error::InvalidCredentials => oidc_err(tr!("err.oidc.keyMismatch")),
             other => other.into(),
         })?;
     state.set_vault(vault);
@@ -1006,8 +1010,8 @@ pub async fn oidc_device_start(app: AppHandle) -> CmdResult<DeviceStart> {
     let doc = discover(&http, &cfg.issuer).await?;
     let endpoint = doc.device_authorization_endpoint.clone().ok_or_else(|| {
         oidc_err(match binding.provider {
-            None => "Cette instance ne propose pas la connexion par téléphone (Pocket ID 0.50 ou plus récent requis).".into(),
-            Some(_) => format!("{} ne propose pas la connexion par téléphone pour cette instance.", cfg.name()),
+            None => tr!("err.oidc.noPhonePocket"),
+            Some(_) => tr!("err.oidc.noPhone", provider = cfg.name()),
         })
     })?;
     let nonce = random_token();
@@ -1020,17 +1024,17 @@ pub async fn oidc_device_start(app: AppHandle) -> CmdResult<DeviceStart> {
         .form(&form)
         .send()
         .await
-        .map_err(|e| oidc_err(format!("Instance injoignable : {e}")))?;
+        .map_err(|e| oidc_err(tr!("err.oidc.unreachable", detail = e)))?;
     if !response.status().is_success() {
         let detail = response.json::<TokenError>().await.ok().map(|e| e.error_description.unwrap_or(e.error));
-        return Err(oidc_err(format!(
-            "Connexion par téléphone refusée par {}{}. Vérifiez que le client OIDC l'autorise.",
-            cfg.name(),
-            detail.map(|d| format!(" ({d})")).unwrap_or_default()
+        return Err(oidc_err(tr!(
+            "err.oidc.phoneRefused",
+            provider = cfg.name(),
+            detail = detail.map(|d| format!(" ({d})")).unwrap_or_default()
         )));
     }
     let auth: DeviceAuthorization =
-        response.json().await.map_err(|_| oidc_err("Réponse de connexion par téléphone invalide."))?;
+        response.json().await.map_err(|_| oidc_err(tr!("err.oidc.badPhoneReply")))?;
     check_user_code(&auth.user_code)?;
     let page = check_verification_uri(&auth.verification_uri, &cfg)?;
     let qr_target = match &auth.verification_uri_complete {
@@ -1065,7 +1069,7 @@ pub async fn oidc_device_wait(app: AppHandle) -> CmdResult<()> {
         .state::<OidcState>()
         .device()
         .take()
-        .ok_or_else(|| oidc_err("Aucune connexion par téléphone en cours."))?;
+        .ok_or_else(|| oidc_err(tr!("err.oidc.noPhoneFlow")))?;
     let identity = poll_device(&app, &mut flow).await?;
     bring_to_front(&app);
     finish_unlock(&app, flow.binding, identity).await
@@ -1168,7 +1172,7 @@ mod tests {
         .unwrap();
         let id = claims.into_identity("groups");
         assert!(id.groups_overage);
-        assert!(check_group(&id, Some("g")).unwrap_err().message.contains("trop de groupes"));
+        assert_eq!(check_group(&id, Some("g")).unwrap_err().message, tr!("err.oidc.groupsOverage"));
     }
 
     fn input(provider: Option<&str>) -> EnrollInput {
@@ -1222,8 +1226,8 @@ mod tests {
             client_secret: None,
         };
         let c = ClientConfig::from(&b);
-        assert_eq!((c.scopes.as_str(), c.groups_claim.as_str(), c.name()), (LEGACY_SCOPES, "groups", "Pocket ID"));
-        assert_eq!(keyring_label(&b), format!("{} — déverrouillage Pocket ID", crate::identity::NAME));
+        assert_eq!((c.scopes.as_str(), c.groups_claim.as_str(), c.name().as_str()), (LEGACY_SCOPES, "groups", "Pocket ID"));
+        assert_eq!(keyring_label(&b), tr!("oidc.keyringLabel", app = crate::identity::NAME, provider = "Pocket ID"));
         let status = OidcStatus::from(&b);
         assert!(status.phone && status.provider == "pocket-id");
         let google = OidcBinding { provider: Some("google".into()), ..b };
@@ -1261,17 +1265,17 @@ mod tests {
         assert_eq!(code, "abc");
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(!client.is_finished(), "aucune réponse avant la décision");
-        stream.write_all(page(false, "Accès refusé", "autre compte").as_bytes()).await.unwrap();
+        stream.write_all(page(false, &tr!("oidc.page.denied"), "autre compte").as_bytes()).await.unwrap();
         drop(stream);
         let out = client.await.unwrap();
-        assert!(out.contains("Accès refusé") && !out.contains("Connexion réussie"));
+        assert!(out.contains(&tr!("oidc.page.denied")) && !out.contains(&tr!("oidc.page.success")));
     }
 
     #[test]
     fn account_name_hides_email() {
         assert_eq!(account_name("Administrateur PocketID <adm@example.org>"), "Administrateur PocketID");
         assert_eq!(account_name("Alice"), "Alice");
-        assert_eq!(account_name("alice@example.org"), "Compte lié");
+        assert_eq!(account_name("alice@example.org"), tr!("oidc.linkedAccount"));
         assert_eq!(account_name("Équipe <ops>"), "Équipe <ops>");
         let id = Identity {
             subject: "s".into(),

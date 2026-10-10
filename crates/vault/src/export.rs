@@ -116,22 +116,22 @@ pub fn seal(data: &ExportData, passphrase: &[u8], kdf: KdfParams) -> Result<Vec<
 /// sont indiscernables : les deux donnent [`Error::InvalidCredentials`].
 pub fn open(raw: &[u8], passphrase: &[u8]) -> Result<ExportData> {
     if raw.len() > MAX_EXPORT_LEN {
-        return Err(Error::Corrupt("fichier d'export trop volumineux"));
+        return Err(Error::Corrupt("export file too large"));
     }
     if raw.len() < 12 || &raw[..8] != MAGIC {
-        return Err(Error::Corrupt("ce fichier n'est pas un export Quayline"));
+        return Err(Error::Corrupt("this file is not a Quayline export"));
     }
     let header_len = u32::from_le_bytes(raw[8..12].try_into().unwrap()) as usize;
     if header_len > MAX_HEADER_LEN || raw.len() < 12 + header_len {
-        return Err(Error::Corrupt("en-tête tronqué"));
+        return Err(Error::Corrupt("truncated header"));
     }
     let header: Header =
-        serde_json::from_slice(&raw[12..12 + header_len]).map_err(|_| Error::Corrupt("en-tête illisible"))?;
+        serde_json::from_slice(&raw[12..12 + header_len]).map_err(|_| Error::Corrupt("unreadable header"))?;
     if header.version != FORMAT_VERSION {
         return Err(Error::UnsupportedVersion(header.version));
     }
     if header.nonce.len() != NONCE_LEN || header.salt.len() != SALT_LEN {
-        return Err(Error::Corrupt("en-tête invalide"));
+        return Err(Error::Corrupt("invalid header"));
     }
     // Bornes des paramètres Argon2 vérifiées par `derive`.
     let key = header.kdf.derive(passphrase, &header.salt)?;
@@ -192,8 +192,6 @@ pub struct ImportReport {
     pub settings: bool,
 }
 
-/// Suffixe des éléments importés gardés en double.
-pub const IMPORTED_SUFFIX: &str = " (importé)";
 
 fn same_identity(a: &Identity, b: &Identity) -> bool {
     a.id == b.id || (a.label == b.label && a.username == b.username)
@@ -228,11 +226,12 @@ pub fn preview(data: &VaultData, import: &ExportData) -> ImportPreview {
     }
 }
 
-/// Libellé d'un élément gardé en double, dans la limite de `max_chars`.
-fn suffixed(label: &str, max_chars: usize) -> String {
-    let keep = max_chars.saturating_sub(IMPORTED_SUFFIX.chars().count());
+/// Libellé d'un élément gardé en double (suivi de `suffix`, « (imported) » dans la
+/// langue de l'interface), dans la limite de `max_chars`.
+fn suffixed(label: &str, suffix: &str, max_chars: usize) -> String {
+    let keep = max_chars.saturating_sub(suffix.chars().count());
     let mut out: String = label.chars().take(keep).collect();
-    out.push_str(IMPORTED_SUFFIX);
+    out.push_str(suffix);
     out
 }
 
@@ -247,6 +246,7 @@ pub fn merge(
     duplicates: Duplicates,
     import_settings: bool,
     max_label: usize,
+    suffix: &str,
 ) -> ImportReport {
     let mut report = ImportReport::default();
     let mut identity_ids: HashMap<Uuid, Uuid> = HashMap::new();
@@ -267,7 +267,7 @@ pub fn merge(
                 }
                 Duplicates::KeepBoth => {
                     identity.id = Uuid::new_v4();
-                    identity.label = suffixed(&identity.label, max_label);
+                    identity.label = suffixed(&identity.label, suffix, max_label);
                     identity_ids.insert(imported_id, identity.id);
                     data.identities.push(identity);
                     report.added += 1;
@@ -296,7 +296,7 @@ pub fn merge(
                 }
                 Duplicates::KeepBoth => {
                     host.id = Uuid::new_v4();
-                    host.label = suffixed(&host.label, max_label);
+                    host.label = suffixed(&host.label, suffix, max_label);
                     data.hosts.push(host);
                     report.added += 1;
                 }
@@ -334,6 +334,7 @@ pub fn merge(
 
 #[cfg(test)]
 mod tests {
+    const SUFFIX: &str = " (importé)";
     use super::*;
     use crate::{HostKind, Secret};
 
@@ -439,7 +440,7 @@ mod tests {
         let import = ExportData::from_vault(&source, ALL, 1, "");
         let p = preview(&target, &import);
         assert_eq!((p.hosts.new, p.identities.new, p.known_hosts.new), (2, 1, 1));
-        let report = merge(&mut target, import, Duplicates::Skip, true, 100);
+        let report = merge(&mut target, import, Duplicates::Skip, true, 100, SUFFIX);
         assert_eq!(report, ImportReport { added: 4, replaced: 0, skipped: 0, settings: true });
         assert_eq!(target.hosts[0].identity_id, Some(target.identities[0].id));
         assert_eq!(target.settings.terminal_font_size, 18);
@@ -456,19 +457,19 @@ mod tests {
 
         let mut skip = source.clone();
         skip.hosts[0].notes = "local".into();
-        let r = merge(&mut skip, import(), Duplicates::Skip, false, 100);
+        let r = merge(&mut skip, import(), Duplicates::Skip, false, 100, SUFFIX);
         assert_eq!((r.added, r.replaced, r.skipped), (0, 0, 4));
         assert_eq!(skip.hosts[0].notes, "local");
 
         let mut replace = source.clone();
         replace.hosts[0].notes = "local".into();
-        let r = merge(&mut replace, import(), Duplicates::Replace, false, 100);
+        let r = merge(&mut replace, import(), Duplicates::Replace, false, 100, SUFFIX);
         assert_eq!((r.added, r.replaced, r.skipped), (0, 3, 1));
         assert_eq!(replace.hosts[0].notes, "");
         assert_eq!(replace.hosts.len(), 2);
 
         let mut both = source.clone();
-        let r = merge(&mut both, import(), Duplicates::KeepBoth, false, 100);
+        let r = merge(&mut both, import(), Duplicates::KeepBoth, false, 100, SUFFIX);
         assert_eq!((r.added, r.skipped), (3, 1));
         assert_eq!(both.hosts.len(), 4);
         assert_eq!(both.identities.len(), 2);
@@ -487,7 +488,7 @@ mod tests {
         let mut id = identity("perso");
         id.password = Some(Secret::new("ancien-mot-de-passe"));
         other.identities.push(id.clone());
-        let r = merge(&mut other, ExportData::from_vault(&source, ALL, 1, ""), Duplicates::Skip, false, 100);
+        let r = merge(&mut other, ExportData::from_vault(&source, ALL, 1, ""), Duplicates::Skip, false, 100, SUFFIX);
         assert_eq!(r.skipped, 1);
         // L'hôte importé est rattaché à l'identité existante.
         assert_eq!(other.hosts[0].identity_id, Some(id.id));
@@ -499,18 +500,18 @@ mod tests {
         let import = ExportData { known_hosts: vec![known("web.example.org", "NEW")], ..Default::default() };
         let p = preview(&data, &import);
         assert_eq!((p.known_hosts.duplicates, p.known_hosts_identical), (1, 0));
-        merge(&mut data, import.clone(), Duplicates::KeepBoth, false, 100);
+        merge(&mut data, import.clone(), Duplicates::KeepBoth, false, 100, SUFFIX);
         assert_eq!(data.known_hosts.len(), 1);
         assert_eq!(data.known_hosts[0].public_key, "OLD");
-        merge(&mut data, import, Duplicates::Replace, false, 100);
+        merge(&mut data, import, Duplicates::Replace, false, 100, SUFFIX);
         assert_eq!(data.known_hosts[0].public_key, "NEW");
     }
 
     #[test]
     fn suffix_respects_label_limit() {
         let long = "x".repeat(100);
-        let s = suffixed(&long, 100);
+        let s = suffixed(&long, SUFFIX, 100);
         assert_eq!(s.chars().count(), 100);
-        assert!(s.ends_with(IMPORTED_SUFFIX));
+        assert!(s.ends_with(SUFFIX));
     }
 }

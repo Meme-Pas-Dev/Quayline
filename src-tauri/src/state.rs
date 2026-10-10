@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use vault::export::ExportData;
 use vault::Vault;
 
+use crate::i18n::tr;
 use crate::error::{CmdError, CmdResult};
 
 pub struct AppState {
@@ -91,7 +92,7 @@ impl AppState {
         if inner.vault.is_none() {
             return Err(CmdError::locked());
         }
-        inner.pending_import.take().ok_or_else(|| CmdError::new("no_import", "Aucun import en cours."))
+        inner.pending_import.take().ok_or_else(|| CmdError::new("no_import", tr!("err.noImport")))
     }
 
     pub fn touch(&self) {
@@ -100,7 +101,7 @@ impl AppState {
 
     pub fn begin_unlock(&self) -> CmdResult<UnlockGuard<'_>> {
         if self.unlocking.swap(true, Ordering::AcqRel) {
-            return Err(CmdError::new("busy", "Une tentative est déjà en cours."));
+            return Err(CmdError::new("busy", tr!("err.busy")));
         }
         Ok(UnlockGuard(&self.unlocking))
     }

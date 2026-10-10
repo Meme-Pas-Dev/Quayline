@@ -13,6 +13,7 @@ use vault::export::ExportData;
 use vault::{Error as VaultError, Host, HostKind, Identity, KdfParams, Secret, Settings, Vault};
 use uuid::Uuid;
 
+use crate::i18n::tr;
 use crate::error::{CmdError, CmdResult};
 use crate::ssh::{self, PromptAnswer, SessionEvent, SshManager};
 use crate::state::AppState;
@@ -62,7 +63,7 @@ async fn blocking<T: Send + 'static>(
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || f(&app.state::<AppState>()))
         .await
-        .map_err(|_| CmdError::new("internal", "Tâche interrompue."))?
+        .map_err(|_| CmdError::new("internal", tr!("err.interrupted")))?
 }
 
 #[tauri::command]
@@ -141,7 +142,7 @@ pub(crate) async fn confirm_master_password(app: &AppHandle, password: Secret) -
     }
     state.record_failed_unlock();
     tokio::time::sleep(Duration::from_secs(u64::from(state.failed_unlocks().min(30)))).await;
-    Err(CmdError::new("bad_password", "Mot de passe maître incorrect."))
+    Err(CmdError::new("bad_password", tr!("err.badMasterPassword")))
 }
 
 #[tauri::command]
@@ -226,22 +227,22 @@ pub fn hosts_list(state: State<'_, AppState>) -> CmdResult<Vec<HostView>> {
 
 #[tauri::command]
 pub fn host_save(state: State<'_, AppState>, host: HostInput) -> CmdResult<HostView> {
-    let label = required(&host.label, "Le nom")?;
+    let label = required(&host.label, &tr!("field.name"))?;
     let hostname = host.hostname.trim().to_string();
     if hostname.is_empty() || hostname.len() > 253 || hostname.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return Err(CmdError::invalid("Adresse d'hôte invalide."));
+        return Err(CmdError::invalid(tr!("err.host.address")));
     }
     if host.port == 0 {
-        return Err(CmdError::invalid("Le port doit être compris entre 1 et 65535."));
+        return Err(CmdError::invalid(tr!("err.host.port")));
     }
-    let username = optional(host.username, "Le nom d'utilisateur")?;
+    let username = optional(host.username, &tr!("field.username"))?;
     if username.as_deref().is_some_and(|u| u.chars().any(|c| c.is_whitespace() || c.is_control())) {
-        return Err(CmdError::invalid("Nom d'utilisateur invalide."));
+        return Err(CmdError::invalid(tr!("err.host.username")));
     }
-    let group = optional(host.group, "Le groupe")?;
-    let color = optional(host.color, "La couleur")?;
+    let group = optional(host.group, &tr!("field.group"))?;
+    let color = optional(host.color, &tr!("field.color"))?;
     if color.as_deref().is_some_and(|c| !is_hex_color(c)) {
-        return Err(CmdError::invalid("Couleur invalide."));
+        return Err(CmdError::invalid(tr!("err.host.color")));
     }
     let tags: Vec<String> = host
         .tags
@@ -251,13 +252,13 @@ pub fn host_save(state: State<'_, AppState>, host: HostInput) -> CmdResult<HostV
         .take(16)
         .collect();
     if host.notes.chars().count() > 4000 {
-        return Err(CmdError::invalid("Les notes sont trop longues."));
+        return Err(CmdError::invalid(tr!("err.host.notes")));
     }
 
     state.mutate_vault(|v| {
         if let Some(identity_id) = host.identity_id {
             if !v.data.identities.iter().any(|i| i.id == identity_id) {
-                return Err(CmdError::invalid("Identité inconnue."));
+                return Err(CmdError::invalid(tr!("err.host.identity")));
             }
         }
         let record = Host {
@@ -386,8 +387,8 @@ pub fn identities_list(state: State<'_, AppState>) -> CmdResult<Vec<IdentityView
 
 #[tauri::command]
 pub fn identity_save(state: State<'_, AppState>, identity: IdentityInput) -> CmdResult<IdentityView> {
-    let label = required(&identity.label, "Le nom")?;
-    let username = optional(identity.username, "Le nom d'utilisateur")?;
+    let label = required(&identity.label, &tr!("field.name"))?;
+    let username = optional(identity.username, &tr!("field.username"))?;
 
     state.mutate_vault(|v| {
         let existing = match identity.id {
@@ -408,7 +409,7 @@ pub fn identity_save(state: State<'_, AppState>, identity: IdentityInput) -> Cmd
         };
         validate_key(&record)?;
         if record.password.is_none() && record.private_key.is_none() {
-            return Err(CmdError::invalid("Renseignez un mot de passe ou une clé privée."));
+            return Err(CmdError::invalid(tr!("err.identity.empty")));
         }
 
         let view = IdentityView::from(&record);
@@ -430,12 +431,12 @@ fn normalize_pem(pem: Secret) -> Secret {
 fn validate_key(identity: &Identity) -> CmdResult<()> {
     let Some(pem) = &identity.private_key else { return Ok(()) };
     let key = PrivateKey::from_openssh(pem.expose()).map_err(|_| {
-        CmdError::invalid("Clé privée illisible. Formats acceptés : OpenSSH (-----BEGIN OPENSSH PRIVATE KEY-----).")
+        CmdError::invalid(tr!("err.identity.keyUnreadable"))
     })?;
     if key.is_encrypted() {
         if let Some(passphrase) = &identity.key_passphrase {
             key.decrypt(passphrase.expose().as_bytes())
-                .map_err(|_| CmdError::invalid("La phrase de passe ne déchiffre pas cette clé."))?;
+                .map_err(|_| CmdError::invalid(tr!("err.identity.badPassphrase")))?;
         }
     }
     Ok(())
@@ -448,11 +449,11 @@ pub fn identity_copy_password(app: AppHandle, state: State<'_, AppState>, id: Uu
     let (password, clear_after) = state.with_vault(|v| {
         let identity = v.data.identities.iter().find(|i| i.id == id).ok_or_else(CmdError::not_found)?;
         let password = identity.password.clone().filter(|p| !p.is_empty());
-        let password = password.ok_or_else(|| CmdError::invalid("Cette identité n'a pas de mot de passe."))?;
+        let password = password.ok_or_else(|| CmdError::invalid(tr!("err.identity.noPassword")))?;
         Ok((password, v.data.settings.clipboard_clear_seconds))
     })?;
     crate::clipboard::copy_secret(&app, password.expose(), clear_after)
-        .map_err(|e| CmdError::new("clipboard", format!("Presse-papiers indisponible : {e}")))?;
+        .map_err(|e| CmdError::new("clipboard", tr!("err.clipboard.unavailable", detail = e)))?;
     Ok(clear_after)
 }
 
@@ -478,12 +479,12 @@ pub fn identity_generate_key(
     label: String,
     username: Option<String>,
 ) -> CmdResult<IdentityView> {
-    let label = required(&label, "Le nom")?;
-    let username = optional(username, "Le nom d'utilisateur")?;
+    let label = required(&label, &tr!("field.name"))?;
+    let username = optional(username, &tr!("field.username"))?;
     let mut key = PrivateKey::random(&mut rand_core::OsRng, Algorithm::Ed25519)
-        .map_err(|_| CmdError::new("internal", "Génération de clé impossible."))?;
+        .map_err(|_| CmdError::new("internal", tr!("err.keygen")))?;
     key.set_comment(format!("{}:{label}", crate::identity::SLUG));
-    let pem = key.to_openssh(LineEnding::LF).map_err(|_| CmdError::new("internal", "Encodage de clé impossible."))?;
+    let pem = key.to_openssh(LineEnding::LF).map_err(|_| CmdError::new("internal", tr!("err.keyEncode")))?;
 
     state.mutate_vault(|v| {
         let record = Identity {
@@ -523,7 +524,7 @@ pub fn settings_save(state: State<'_, AppState>, settings: Settings) -> CmdResul
         || !(8..=32).contains(&settings.terminal_font_size)
         || !TERMINAL_THEMES.contains(&settings.terminal_theme.as_str())
     {
-        return Err(CmdError::invalid("Réglages hors limites."));
+        return Err(CmdError::invalid(tr!("err.settingsRange")));
     }
     state.mutate_vault(|v| {
         v.data.settings = settings.clone();
@@ -561,7 +562,7 @@ pub fn ssh_paste(
 ) -> CmdResult<()> {
     let text = clipboard
         .read_text()
-        .map_err(|e| CmdError::new("clipboard", format!("Presse-papiers illisible : {e}")))?;
+        .map_err(|e| CmdError::new("clipboard", tr!("err.clipboard.unreadable", detail = e)))?;
     if text.is_empty() {
         return Ok(());
     }
@@ -623,10 +624,10 @@ pub fn known_host_delete(state: State<'_, AppState>, hostname: String, port: u16
 fn required(value: &str, field: &str) -> CmdResult<String> {
     let v = value.trim();
     if v.is_empty() {
-        return Err(CmdError::invalid(format!("{field} est obligatoire.")));
+        return Err(CmdError::invalid(tr!("err.field.required", field = field)));
     }
     if v.chars().count() > MAX_LABEL || v.chars().any(char::is_control) {
-        return Err(CmdError::invalid(format!("{field} est invalide.")));
+        return Err(CmdError::invalid(tr!("err.field.invalid", field = field)));
     }
     Ok(v.to_string())
 }
@@ -653,9 +654,9 @@ const MAX_IMPORTED: usize = 10_000;
 /// fabriqué par quelqu'un d'autre que l'utilisateur. Un thème de terminal inconnu
 /// (version plus récente) est remplacé par le thème par défaut.
 pub(crate) fn validate_import(data: &mut ExportData) -> CmdResult<()> {
-    let bad = |what: &str, label: &str| CmdError::invalid(format!("Fichier refusé : {what} invalide ({label})."));
+    let bad = |what: String, label: &str| CmdError::invalid(tr!("err.file.invalidItem", what = what, label = label));
     if data.hosts.len() > MAX_IMPORTED || data.identities.len() > MAX_IMPORTED || data.known_hosts.len() > MAX_IMPORTED {
-        return Err(CmdError::invalid("Fichier refusé : trop d'éléments."));
+        return Err(CmdError::invalid(tr!("err.file.tooMany")));
     }
     for h in &data.hosts {
         let ok = required(&h.label, "").is_ok_and(|l| l == h.label)
@@ -670,7 +671,7 @@ pub(crate) fn validate_import(data: &mut ExportData) -> CmdResult<()> {
             && h.tags.iter().all(|t| !t.trim().is_empty() && t.chars().count() <= 32)
             && h.notes.chars().count() <= 4000;
         if !ok {
-            return Err(bad("hôte", &h.label.chars().take(40).collect::<String>()));
+            return Err(bad(tr!("item.host"), &h.label.chars().take(40).collect::<String>()));
         }
     }
     for i in &data.identities {
@@ -679,7 +680,7 @@ pub(crate) fn validate_import(data: &mut ExportData) -> CmdResult<()> {
             && (i.password.is_some() || i.private_key.is_some())
             && validate_key(i).is_ok();
         if !ok {
-            return Err(bad("identité", &i.label.chars().take(40).collect::<String>()));
+            return Err(bad(tr!("item.identity"), &i.label.chars().take(40).collect::<String>()));
         }
     }
     for k in &data.known_hosts {
@@ -692,7 +693,7 @@ pub(crate) fn validate_import(data: &mut ExportData) -> CmdResult<()> {
             && !k.public_key.is_empty()
             && k.public_key.len() <= 16 * 1024;
         if !ok {
-            return Err(bad("clé d'hôte", &k.hostname.chars().take(40).collect::<String>()));
+            return Err(bad(tr!("item.knownHost"), &k.hostname.chars().take(40).collect::<String>()));
         }
     }
     if let Some(s) = &mut data.settings {
@@ -700,7 +701,7 @@ pub(crate) fn validate_import(data: &mut ExportData) -> CmdResult<()> {
             s.terminal_theme = Settings::default().terminal_theme;
         }
         if s.auto_lock_minutes > 240 || s.clipboard_clear_seconds > 600 || !(8..=32).contains(&s.terminal_font_size) {
-            return Err(CmdError::invalid("Fichier refusé : réglages hors limites."));
+            return Err(CmdError::invalid(tr!("err.file.settings")));
         }
     }
     Ok(())

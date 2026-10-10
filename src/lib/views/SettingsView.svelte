@@ -13,6 +13,9 @@
   import { data, handleError } from "../store.svelte";
   import { TERMINAL_THEMES } from "../terminalThemes";
   import { setThemePreference, themePreference, type ThemePreference } from "../appearance";
+  import { providerName } from "../oidcProviders";
+  import { IS_MAC } from "../platform";
+  import { formatList, languagePreference, setLanguagePreference, t, tn, type LanguagePreference, type MessageKey } from "../i18n/index.svelte";
 
   // Copie locale éditable ; la valeur enregistrée est publiée dans le store
   // pour que les terminaux ouverts l'appliquent immédiatement.
@@ -27,8 +30,11 @@
   let changing = $state(false);
 
   let appearance = $state<ThemePreference>(themePreference());
+  let languageChoice = $state<LanguagePreference>(languagePreference());
 
-  const THEMES = Object.entries(TERMINAL_THEMES).map(([id, t]) => [id, t.name]);
+  // Noms propres (Dracula, Nord…) gardés tels quels ; « Nuit » et « Jour » traduits.
+  const themeLabel = (name: string) => (name.startsWith("theme.") ? t(name as MessageKey) : name);
+  const THEMES = Object.entries(TERMINAL_THEMES).map(([id, theme]) => [id, theme.name]);
 
   onMount(async () => {
     api.appInfo().then((i) => (about = i)).catch(() => {});
@@ -52,7 +58,7 @@
     try {
       await api.knownHostDelete(forgetting.hostname, forgetting.port);
       knownHosts = await api.knownHostsList();
-      toast("Clé d'hôte oubliée", "success");
+      toast(t("settings.hostKeyForgotten"), "success");
     } catch (e) {
       handleError(e);
     }
@@ -69,7 +75,7 @@
         terminal_font_size: Number(settings.terminal_font_size),
       });
       data.settings = { ...settings };
-      toast("Réglages enregistrés", "success");
+      toast(t("settings.saved"), "success");
     } catch (e) {
       handleError(e);
     }
@@ -84,8 +90,8 @@
   async function loadUnlockMethods() {
     const [keys, oidc] = await Promise.all([api.fido2List().catch(() => []), api.oidcStatus().catch(() => null)]);
     unlockMethods = [
-      ...(oidc ? [oidc.providerName] : []),
-      ...(keys.length ? [keys.length > 1 ? `${keys.length} clés de sécurité` : "1 clé de sécurité"] : []),
+      ...(oidc ? [providerName(oidc.provider)] : []),
+      ...(keys.length ? [tn("settings.securityKeys", keys.length)] : []),
     ];
   }
 
@@ -103,8 +109,8 @@
       methodsVersion += 1;
       toast(
         unlockMethods.length
-          ? `Mot de passe maître modifié. À réactiver : ${unlockMethods.join(" et ")}.`
-          : "Mot de passe maître modifié",
+          ? t("settings.passwordChangedReenable", { methods: formatList(unlockMethods) })
+          : t("settings.passwordChanged"),
         "success",
         6000,
       );
@@ -116,90 +122,100 @@
   }
 </script>
 
-<PageHeader title="Réglages" />
+<PageHeader title={t("settings.title")} />
 
 <div class="page">
   <section class="card">
-    <h2><Icon name="contrast" size={17} /> Apparence</h2>
+    <h2><Icon name="contrast" size={17} /> {t("settings.appearance.title")}</h2>
     <div class="setting">
       <div>
-        <strong>Thème de l'interface</strong>
-        <p>« Système » suit le réglage clair ou sombre de l'ordinateur.</p>
+        <strong>{t("settings.appearance.language")}</strong>
+        <p>{t("settings.appearance.languageHint")}</p>
+      </div>
+      <!-- Noms des langues dans leur propre langue, pour s'y retrouver quelle que soit
+           la langue affichée. -->
+      <select class="input" bind:value={languageChoice} onchange={() => setLanguagePreference(languageChoice)}>
+        <option value="system">{t("settings.appearance.system")}</option>
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+      </select>
+    </div>
+    <div class="setting">
+      <div>
+        <strong>{t("settings.appearance.theme")}</strong>
+        <p>{t("settings.appearance.themeHint")}</p>
       </div>
       <select class="input" bind:value={appearance} onchange={() => setThemePreference(appearance)}>
-        <option value="system">Système</option>
-        <option value="light">Clair</option>
-        <option value="dark">Sombre</option>
+        <option value="system">{t("settings.appearance.system")}</option>
+        <option value="light">{t("settings.appearance.light")}</option>
+        <option value="dark">{t("settings.appearance.dark")}</option>
       </select>
     </div>
   </section>
 
   {#if settings}
     <section class="card">
-      <h2><Icon name="shield" size={17} /> Sécurité</h2>
+      <h2><Icon name="shield" size={17} /> {t("settings.security.title")}</h2>
       <div class="setting">
         <div>
-          <strong>Verrouillage automatique</strong>
-          <p>Le coffre se verrouille après une période d'inactivité.</p>
+          <strong>{t("settings.autoLock")}</strong>
+          <p>{t("settings.autoLockHint")}</p>
         </div>
         <select class="input" bind:value={settings.auto_lock_minutes} onchange={save}>
-          <option value={1}>1 minute</option>
-          <option value={5}>5 minutes</option>
-          <option value={10}>10 minutes</option>
-          <option value={30}>30 minutes</option>
-          <option value={60}>1 heure</option>
-          <option value={0}>Jamais</option>
+          {#each [1, 5, 10, 30] as m}<option value={m}>{tn("duration.minutes", m)}</option>{/each}
+          <option value={60}>{t("duration.hour")}</option>
+          <option value={0}>{t("duration.never")}</option>
         </select>
       </div>
       <div class="setting">
         <div>
-          <strong>Verrouillage avec le système</strong>
-          <p>Quand la session KDE ou GNOME est verrouillée, et avant la mise en veille.</p>
+          <strong>{t("settings.systemLock")}</strong>
+          <p>{t(IS_MAC ? "settings.systemLockHintMac" : "settings.systemLockHint")}</p>
         </div>
         <select class="input" bind:value={settings.lock_on_system_events} onchange={save}>
-          <option value={true}>Activé</option>
-          <option value={false}>Désactivé</option>
+          <option value={true}>{t("common.enabled")}</option>
+          <option value={false}>{t("common.disabled")}</option>
         </select>
       </div>
       <div class="setting">
         <div>
-          <strong>Sessions au verrouillage</strong>
-          <p>Fermer les connexions est plus sûr ; les garder évite de se reconnecter.</p>
+          <strong>{t("settings.lockSessions")}</strong>
+          <p>{t("settings.lockSessionsHint")}</p>
         </div>
         <select class="input" bind:value={settings.lock_closes_sessions} onchange={save}>
-          <option value={true}>Les fermer</option>
-          <option value={false}>Les garder ouvertes</option>
+          <option value={true}>{t("settings.lockSessionsClose")}</option>
+          <option value={false}>{t("settings.lockSessionsKeep")}</option>
         </select>
       </div>
       <div class="setting">
         <div>
-          <strong>Effacement du presse-papiers</strong>
-          <p>Après la copie d'un mot de passe depuis le trousseau.</p>
+          <strong>{t("settings.clipboard")}</strong>
+          <p>{t("settings.clipboardHint")}</p>
         </div>
         <select class="input" bind:value={settings.clipboard_clear_seconds} onchange={save}>
-          <option value={15}>15 secondes</option>
-          <option value={30}>30 secondes</option>
-          <option value={60}>1 minute</option>
-          <option value={0}>Jamais</option>
+          <option value={15}>{t("duration.seconds", { count: 15 })}</option>
+          <option value={30}>{t("duration.seconds", { count: 30 })}</option>
+          <option value={60}>{tn("duration.minutes", 1)}</option>
+          <option value={0}>{t("duration.never")}</option>
         </select>
       </div>
     </section>
 
     <section class="card">
-      <h2><Icon name="terminal" size={17} /> Terminal</h2>
+      <h2><Icon name="terminal" size={17} /> {t("settings.terminal.title")}</h2>
       <div class="setting">
         <div>
-          <strong>Thème</strong>
-          <p>Palette de couleurs du terminal.</p>
+          <strong>{t("settings.terminal.theme")}</strong>
+          <p>{t("settings.terminal.themeHint")}</p>
         </div>
         <select class="input" bind:value={settings.terminal_theme} onchange={save}>
-          {#each THEMES as [id, name]}<option value={id}>{name}</option>{/each}
+          {#each THEMES as [id, name]}<option value={id}>{themeLabel(name)}</option>{/each}
         </select>
       </div>
       <div class="setting">
         <div>
-          <strong>Taille de police</strong>
-          <p>En points.</p>
+          <strong>{t("settings.terminal.fontSize")}</strong>
+          <p>{t("settings.terminal.fontSizeHint")}</p>
         </div>
         <input class="input" type="number" min="8" max="32" bind:value={settings.terminal_font_size} onchange={save} />
       </div>
@@ -212,12 +228,10 @@
   {/key}
 
   <section class="card">
-    <h2><Icon name="server" size={17} /> Clés d'hôte connues</h2>
-    <p class="hint">
-      Empreintes des serveurs approuvés. Oublier une clé fera redemander la confirmation à la prochaine connexion.
-    </p>
+    <h2><Icon name="server" size={17} /> {t("settings.knownHosts.title")}</h2>
+    <p class="hint">{t("settings.knownHosts.hint")}</p>
     {#if knownHosts.length === 0}
-      <p class="hint">Aucun serveur approuvé pour l'instant.</p>
+      <p class="hint">{t("settings.knownHosts.empty")}</p>
     {/if}
     {#each knownHosts as k (k.hostname + ":" + k.port)}
       <div class="known">
@@ -225,7 +239,7 @@
           <strong>{k.hostname}{k.port !== 22 ? `:${k.port}` : ""}</strong>
           <span class="mono">{k.algorithm} · {k.fingerprint}</span>
         </div>
-        <button class="btn ghost icon" onclick={() => (forgetting = k)} title="Oublier"><Icon name="trash" size={16} /></button>
+        <button class="btn ghost icon" onclick={() => (forgetting = k)} title={t("settings.knownHosts.forget")}><Icon name="trash" size={16} /></button>
       </div>
     {/each}
   </section>
@@ -233,34 +247,31 @@
   <BackupSettings knownHostsCount={knownHosts.length} onimported={refreshAfterImport} />
 
   <section class="card">
-    <h2><Icon name="lock" size={17} /> Mot de passe maître</h2>
+    <h2><Icon name="lock" size={17} /> {t("settings.master.title")}</h2>
     <form class="pw" onsubmit={changePassword}>
       <label class="field">
-        <span>Mot de passe actuel</span>
+        <span>{t("settings.master.current")}</span>
         <PasswordInput bind:value={current} />
       </label>
       <label class="field">
-        <span>Nouveau mot de passe</span>
-        <PasswordInput bind:value={next} placeholder="12 caractères minimum" />
+        <span>{t("settings.master.new")}</span>
+        <PasswordInput bind:value={next} placeholder={t("lock.minLength", { count: 12 })} />
       </label>
       <StrengthMeter password={next} />
       {#if unlockMethods.length}
         <p class="rotation-note">
           <Icon name="alert" size={14} />
-          <span>
-            Le changement renouvelle la clé de chiffrement du coffre. À réactiver ensuite :
-            {unlockMethods.join(", ")}.
-          </span>
+          <span>{t("settings.master.rotation", { methods: formatList(unlockMethods) })}</span>
         </p>
       {/if}
       <label class="field">
-        <span>Confirmation</span>
+        <span>{t("lock.confirmation")}</span>
         <PasswordInput bind:value={confirm} />
-        {#if confirm && confirm !== next}<small class="error-text">Les mots de passe ne correspondent pas.</small>{/if}
+        {#if confirm && confirm !== next}<small class="error-text">{t("lock.mismatch")}</small>{/if}
       </label>
       <div>
         <button class="btn primary" type="submit" disabled={changing || !current || next.length < 12 || next !== confirm}>
-          {changing ? "Modification…" : "Changer le mot de passe"}
+          {t(changing ? "settings.master.changing" : "settings.master.change")}
         </button>
       </div>
     </form>
@@ -268,22 +279,22 @@
 
   {#if about}
     <section class="card about">
-      <h2><Icon name="sparkles" size={17} /> À propos</h2>
+      <h2><Icon name="sparkles" size={17} /> {t("settings.about.title")}</h2>
       <p>
         <strong>{about.name} {about.version}</strong>
-        <span class="badge">{about.build === "dev" ? "développement" : `build ${about.build}`}</span>
+        <span class="badge">{about.build === "dev" ? t("settings.about.dev") : t("settings.about.build", { build: about.build })}</span>
         {#if about.flatpak}<span class="badge">Flatpak</span>{/if}
       </p>
-      {#if about.commit}<p class="faint">Commit <code>{about.commit}</code></p>{/if}
+      {#if about.commit}<p class="faint">{t("settings.about.commit")} <code>{about.commit}</code></p>{/if}
     </section>
   {/if}
 </div>
 
 {#if forgetting}
   <ConfirmDialog
-    title="Oublier cette clé ?"
-    message="La clé de « {forgetting.hostname} » sera supprimée. Vous devrez vérifier et approuver à nouveau l'empreinte à la prochaine connexion."
-    confirmLabel="Oublier"
+    title={t("settings.forgetTitle")}
+    message={t("settings.forgetMessage", { host: forgetting.hostname })}
+    confirmLabel={t("settings.knownHosts.forget")}
     onconfirm={forget}
     onclose={() => (forgetting = null)}
   />

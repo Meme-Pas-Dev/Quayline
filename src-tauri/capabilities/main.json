@@ -9,6 +9,7 @@
     "core:window:allow-show",
     "core:window:allow-set-theme",
     "allow-app-info",
+    "allow-set-language",
     "allow-vault-status",
     "allow-vault-create",
     "allow-vault-unlock",

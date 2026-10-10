@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t, type MessageKey } from "../i18n/index.svelte";
+  import { KEYS } from "../platform";
   import { onDestroy, onMount, untrack } from "svelte";
   import { api, errorCode, errorMessage, type Fido2Device, type Fido2Key } from "../api";
   import { APP_NAME } from "../identity";
@@ -13,10 +15,10 @@
   }: { existing: number; onclose: () => void; onadded: (key: Fido2Key) => void } = $props();
 
   type Step = "detect" | "create-pin" | "details" | "touch" | "done";
-  const STEPS: [Step[], string][] = [
-    [["detect", "create-pin"], "Brancher"],
-    [["details"], "Renseigner"],
-    [["touch"], "Toucher"],
+  const STEPS: [Step[], MessageKey][] = [
+    [["detect", "create-pin"], "wizard.step.plug"],
+    [["details"], "wizard.step.details"],
+    [["touch"], "wizard.step.touch"],
   ];
 
   let step = $state<Step>("detect");
@@ -30,7 +32,8 @@
 
   // Valeurs initiales seulement : `existing` ne change pas pendant l'assistant.
   const firstKey = untrack(() => existing === 0);
-  let label = $state(firstKey ? "Ma clé de sécurité" : "Clé de secours");
+  const defaultLabel = t("wizard.defaultLabel");
+  let label = $state(firstKey ? defaultLabel : t("wizard.backupLabel"));
   let pin = $state("");
   let password = $state("");
   let touch = $state(0);
@@ -46,7 +49,7 @@
     try {
       device = await api.fido2Detect();
       detectError = "";
-      if (device.product && firstKey && label === "Ma clé de sécurité") label = device.product;
+      if (device.product && firstKey && label === defaultLabel) label = device.product;
     } catch (e) {
       device = null;
       detectError = errorMessage(e);
@@ -118,12 +121,12 @@
   const currentIndex = $derived(step === "done" ? STEPS.length : STEPS.findIndex(([steps]) => steps.includes(step)));
 </script>
 
-<Modal title="Ajouter une clé de sécurité" onclose={() => !busy && onclose()} width={500}>
+<Modal title={t("wizard.title")} onclose={() => !busy && onclose()} width={500}>
   <ol class="stepper">
     {#each STEPS as [, name], i}
       <li class:active={i === currentIndex} class:done={i < currentIndex}>
         <span class="dot">{#if i < currentIndex}<Icon name="check" size={12} />{:else}{i + 1}{/if}</span>
-        {name}
+        {t(name)}
       </li>
     {/each}
   </ol>
@@ -131,89 +134,89 @@
   {#if step === "detect"}
     <div class="panel">
       {#if detectError}
-        <div class="status bad"><Icon name="alert" size={20} /><div><strong>Clé illisible</strong><span>{detectError}</span></div></div>
+        <div class="status bad"><Icon name="alert" size={20} /><div><strong>{t("wizard.unreadable")}</strong><span>{detectError}</span></div></div>
       {:else if !device}
-        <div class="status"><span class="spinner"></span><div><strong>Recherche d'une clé…</strong></div></div>
+        <div class="status"><span class="spinner"></span><div><strong>{t("wizard.searching")}</strong></div></div>
       {:else if device.state === "none"}
         <div class="status waiting">
           <Icon name="key" size={22} />
           <div>
-            <strong>Branchez votre clé de sécurité</strong>
-            <span>YubiKey, Nitrokey, SoloKey… sur un port USB. Elle sera détectée automatiquement.</span>
+            <strong>{t("wizard.plugIn")}</strong>
+            <span>{t("wizard.plugInHint")}</span>
           </div>
         </div>
       {:else if device.state === "multiple"}
         <div class="status bad">
           <Icon name="alert" size={20} />
-          <div><strong>Plusieurs clés sont branchées</strong><span>Ne laissez que celle à enregistrer.</span></div>
+          <div><strong>{t("wizard.multiple")}</strong><span>{t("wizard.multipleHint")}</span></div>
         </div>
       {:else if device.state === "unsupported"}
         <div class="status bad">
           <Icon name="alert" size={20} />
           <div>
-            <strong>{device.product ?? "Cette clé"} n'est pas compatible</strong>
-            <span>Il faut une clé FIDO2 avec code PIN et extension hmac-secret. Les anciennes clés U2F seules ne suffisent pas.</span>
+            <strong>{t("wizard.unsupported", { device: device.product ?? t("wizard.thisKey") })}</strong>
+            <span>{t("wizard.unsupportedHint")}</span>
           </div>
         </div>
       {:else}
         <div class="status ok">
           <Icon name="check" size={20} />
           <div>
-            <strong>{device.product ?? "Clé de sécurité"} détectée</strong>
+            <strong>{t("wizard.detected", { device: device.product ?? t("wizard.securityKey") })}</strong>
             {#if device.hasPin}
-              <span>Code PIN défini{device.pinRetries !== null ? ` · ${device.pinRetries} essais restants avant blocage` : ""}.</span>
+              <span
+                >{t("wizard.pinSet")}{device.pinRetries !== null ? t("wizard.retriesLeft", { count: device.pinRetries }) : ""}.</span
+              >
             {:else}
-              <span>Cette clé n'a pas encore de code PIN : il est obligatoire, créons-le.</span>
+              <span>{t("wizard.noPin")}</span>
             {/if}
           </div>
         </div>
       {/if}
       <p class="note">
-        Gardez la clé branchée jusqu'à la fin. Ne la touchez que lorsque {APP_NAME} vous le demande : un toucher à un
-        autre moment peut taper un code dans la fenêtre active.
+        {t("wizard.keepPlugged", { app: APP_NAME })}
       </p>
     </div>
   {:else if step === "create-pin"}
     <form id="fido2-pin" class="panel" onsubmit={createPin}>
       <p class="intro">
-        Le code PIN protège la clé : sans lui, quelqu'un qui la trouverait ne pourrait pas ouvrir votre coffre. Il est
-        enregistré <strong>dans la clé</strong> et servira aussi aux autres sites et applications qui l'utilisent.
+        {t("wizard.pinIntro.before")}<strong>{t("wizard.pinIntro.strong")}</strong>{t("wizard.pinIntro.after")}
       </p>
       <label class="field">
-        <span>Nouveau code PIN</span>
+        <span>{t("wizard.newPin")}</span>
         <PasswordInput bind:value={newPin} autofocus />
         {#if pinTooShort}
-          <small class="error-text">Au moins {device?.minPinLength ?? 4} caractères.</small>
+          <small class="error-text">{t("wizard.pinTooShort", { count: device?.minPinLength ?? 4 })}</small>
         {:else}
-          <small>{device?.minPinLength ?? 4} caractères minimum ; chiffres, lettres ou les deux.</small>
+          <small>{t("wizard.pinHint", { count: device?.minPinLength ?? 4 })}</small>
         {/if}
       </label>
       <label class="field">
-        <span>Confirmation</span>
+        <span>{t("lock.confirmation")}</span>
         <PasswordInput bind:value={newPinConfirm} />
-        {#if pinMismatch}<small class="error-text">Les deux codes ne correspondent pas.</small>{/if}
+        {#if pinMismatch}<small class="error-text">{t("wizard.pinMismatch")}</small>{/if}
       </label>
       {#if error}<p class="error-text" role="alert">{error}</p>{/if}
     </form>
   {:else if step === "details"}
     <form id="fido2-details" class="panel" onsubmit={enroll}>
       <label class="field">
-        <span>Nom de la clé</span>
+        <span>{t("wizard.keyName")}</span>
         <input class="input" bind:value={label} maxlength="60" spellcheck="false" />
-        <small>Pour la reconnaître dans la liste, par exemple « YubiKey bleue ».</small>
+        <small>{t("wizard.keyNameHint")}</small>
       </label>
       <label class="field">
-        <span>Code PIN de la clé</span>
+        <span>{t("wizard.keyPin")}</span>
         <PasswordInput bind:value={pin} autofocus={!pin} />
         <small>
-          Le code de la <strong>clé</strong>, pas le mot de passe de {APP_NAME}.
-          {#if device?.pinRetries}{device.pinRetries} essais avant blocage.{/if}
+          {t("wizard.keyPinHint.before")}<strong>{t("wizard.keyPinHint.strong")}</strong>{t("wizard.keyPinHint.after", { app: APP_NAME })}
+          {#if device?.pinRetries}{t("wizard.retriesBefore", { count: device.pinRetries })}{/if}
         </small>
       </label>
       <label class="field">
-        <span>Mot de passe maître</span>
+        <span>{t("lock.masterPassword")}</span>
         <PasswordInput bind:value={password} autofocus={!!pin} />
-        <small>Pour confirmer que c'est bien vous qui ajoutez cette clé.</small>
+        <small>{t("wizard.passwordHint")}</small>
       </label>
       {#if error}<p class="error-text" role="alert">{error}</p>{/if}
     </form>
@@ -222,20 +225,16 @@
       <div class="touch">
         <div class="pulse"><Icon name="key" size={30} /></div>
         {#if touch === 0}
-          <strong>Préparation…</strong>
-          <span>Vérification du code PIN.</span>
+          <strong>{t("wizard.preparing")}</strong>
+          <span>{t("wizard.checkingPin")}</span>
         {:else}
-          <strong>Touchez votre clé ({touch}/2)</strong>
-          <span>
-            {touch === 1
-              ? "Elle clignote : touchez-la pour créer l'identifiant."
-              : "Elle clignote à nouveau : touchez-la une seconde fois pour terminer."}
-          </span>
+          <strong>{t("wizard.touchKey", { step: touch })}</strong>
+          <span>{t(touch === 1 ? "wizard.touch1" : "wizard.touch2")}</span>
         {/if}
       </div>
       <ol class="touches">
-        <li class:active={touch === 1} class:done={touch > 1}>1<sup>er</sup> toucher : création de l'identifiant</li>
-        <li class:active={touch === 2}>2<sup>e</sup> toucher : calcul du secret</li>
+        <li class:active={touch === 1} class:done={touch > 1}>{t("wizard.touchStep1")}</li>
+        <li class:active={touch === 2}>{t("wizard.touchStep2")}</li>
       </ol>
     </div>
   {:else}
@@ -243,38 +242,37 @@
       <div class="status ok">
         <Icon name="check" size={20} />
         <div>
-          <strong>Clé « {added?.label} » enregistrée</strong>
-          <span>Elle peut maintenant déverrouiller le coffre.</span>
+          <strong>{t("wizard.registered", { name: added?.label ?? "" })}</strong>
+          <span>{t("wizard.registeredHint")}</span>
         </div>
       </div>
       <p class="intro">
-        Pour l'essayer : verrouillez avec <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>L</kbd>, choisissez « Utiliser une clé de
-        sécurité », saisissez le code PIN puis touchez la clé.
-        {#if firstKey}<br />Pensez à enregistrer aussi une clé de secours, au cas où celle-ci serait perdue.{/if}
+        {t("wizard.tryIt", { keys: KEYS.lock })}
+        {#if firstKey}<br />{t("wizard.backupAdvice")}{/if}
       </p>
     </div>
   {/if}
 
   {#snippet footer()}
     {#if step === "detect"}
-      <button class="btn" onclick={onclose}>Annuler</button>
+      <button class="btn" onclick={onclose}>{t("common.cancel")}</button>
       {#if device?.state === "ready" && !device.hasPin}
-        <button class="btn primary" onclick={() => goTo("create-pin")}>Créer un code PIN</button>
+        <button class="btn primary" onclick={() => goTo("create-pin")}>{t("wizard.createPin")}</button>
       {:else}
-        <button class="btn primary" disabled={device?.state !== "ready"} onclick={() => goTo("details")}>Continuer</button>
+        <button class="btn primary" disabled={device?.state !== "ready"} onclick={() => goTo("details")}>{t("wizard.continue")}</button>
       {/if}
     {:else if step === "create-pin"}
-      <button class="btn" onclick={() => goTo("detect")} disabled={busy}>Retour</button>
+      <button class="btn" onclick={() => goTo("detect")} disabled={busy}>{t("wizard.back")}</button>
       <button class="btn primary" type="submit" form="fido2-pin" disabled={!canCreatePin}>
-        {busy ? "Création…" : "Créer le code PIN"}
+        {t(busy ? "wizard.creating" : "wizard.createPinAction")}
       </button>
     {:else if step === "details"}
-      <button class="btn" onclick={() => goTo("detect")}>Retour</button>
-      <button class="btn primary" type="submit" form="fido2-details" disabled={!canEnroll}>Enregistrer la clé</button>
+      <button class="btn" onclick={() => goTo("detect")}>{t("wizard.back")}</button>
+      <button class="btn primary" type="submit" form="fido2-details" disabled={!canEnroll}>{t("wizard.registerKey")}</button>
     {:else if step === "touch"}
-      <span class="footnote">Sans toucher, la clé abandonne d'elle-même au bout de 30 secondes environ.</span>
+      <span class="footnote">{t("wizard.timeoutNote")}</span>
     {:else}
-      <button class="btn primary" onclick={onclose}>Terminer</button>
+      <button class="btn primary" onclick={onclose}>{t("wizard.finish")}</button>
     {/if}
   {/snippet}
 </Modal>
@@ -428,14 +426,6 @@
     margin-right: auto;
     font-size: 12px;
     color: var(--text-faint);
-  }
-  kbd {
-    padding: 0 5px;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    font-family: var(--font-mono);
-    font-size: 11.5px;
   }
   .spinner {
     width: 18px;

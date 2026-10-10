@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.svelte";
   import { tick } from "svelte";
   import { api, type Host } from "../api";
   import ConfirmDialog from "../components/ConfirmDialog.svelte";
@@ -111,7 +112,7 @@
     try {
       await api.hostDelete(deleting.id);
       await reload();
-      toast("Hôte supprimé", "success");
+      toast(t("hosts.deleted"), "success");
     } catch (e) {
       handleError(e);
     }
@@ -130,13 +131,13 @@
   onresize={() => closeMenu()}
 />
 
-<PageHeader title="Hôtes" subtitle="Vos sessions SSH et SFTP enregistrées">
+<PageHeader title={t("hosts.title")} subtitle={t("hosts.subtitle")}>
   {#snippet actions()}
     <div class="search">
       <Icon name="search" size={16} />
-      <input class="input" placeholder="Rechercher…" bind:value={query} spellcheck="false" />
+      <input class="input" placeholder={t("hosts.search")} bind:value={query} spellcheck="false" />
     </div>
-    <button class="btn primary" onclick={() => (editing = null)}><Icon name="plus" size={16} /> Nouvel hôte</button>
+    <button class="btn primary" onclick={() => (editing = null)}><Icon name="plus" size={16} /> {t("hosts.new")}</button>
   {/snippet}
 </PageHeader>
 
@@ -144,19 +145,19 @@
   {#if data.loaded && data.hosts.length === 0}
     <div class="empty">
       <div class="empty-icon"><Icon name="server" size={28} /></div>
-      <h3>Aucun hôte pour l'instant</h3>
-      <p>Ajoutez votre premier serveur pour vous y connecter en un clic.</p>
-      <button class="btn primary" onclick={() => (editing = null)}><Icon name="plus" size={16} /> Ajouter un hôte</button>
+      <h3>{t("hosts.empty.title")}</h3>
+      <p>{t("hosts.empty.text")}</p>
+      <button class="btn primary" onclick={() => (editing = null)}><Icon name="plus" size={16} /> {t("hosts.empty.add")}</button>
     </div>
   {:else if data.loaded && filtered.length === 0}
-    <div class="empty"><p>Aucun résultat pour « {query} ».</p></div>
+    <div class="empty"><p>{t("hosts.noResults", { query })}</p></div>
   {/if}
 
   {#each groups as [group, hosts] (group)}
     <section>
       <h2>
         <Icon name="folder" size={14} />
-        {group || "Sans groupe"}
+        {group || t("hosts.noGroup")}
         <em>{hosts.length}</em>
       </h2>
       <div class="grid">
@@ -173,7 +174,7 @@
               <button
                 class="main"
                 onclick={() => connect(h)}
-                title={h.kind === "sftp" ? "Ouvrir l'explorateur SFTP" : "Ouvrir une session SSH"}
+                title={t(h.kind === "sftp" ? "hosts.openSftpTitle" : "hosts.openSshTitle")}
               >
                 <div class="avatar"><Icon name={h.kind === "sftp" ? "folder" : "terminal"} size={18} /></div>
                 <div class="info">
@@ -188,16 +189,16 @@
                     <Icon name="key" size={11} /><span class="text">{identityName(h.identityId)}</span>
                   </span>
                 {/if}
-                {#each h.tags.slice(0, 3) as t}<span class="badge" title={t}><span class="text">{t}</span></span>{/each}
+                {#each h.tags.slice(0, 3) as tag}<span class="badge" title={tag}><span class="text">{tag}</span></span>{/each}
               </div>
             </div>
             <button
               class="btn ghost icon menu-btn"
               onclick={(e) => onMenuButton(e, h)}
-              aria-label="Actions pour {h.label}"
+              aria-label={t("hosts.actionsFor", { name: h.label })}
               aria-haspopup="menu"
               aria-expanded={menu?.host.id === h.id}
-              title="Actions"
+              title={t("hosts.actions")}
             >
               <Icon name="menu" size={16} />
             </button>
@@ -217,21 +218,21 @@
     style:left="{menu.x}px"
     style:top="{menu.y}px"
     role="menu"
-    aria-label="Actions pour {h.label}"
+    aria-label={t("hosts.actionsFor", { name: h.label })}
     onkeydown={onMenuKeydown}
   >
     <div class="menu-head">{h.label} · {h.kind === "sftp" ? "SFTP" : "SSH"}</div>
     <button role="menuitem" onclick={() => act(connect)}>
-      {#if h.kind === "sftp"}<Icon name="folder" size={15} /> Ouvrir l'explorateur{:else}<Icon name="terminal" size={15} /> Ouvrir le terminal{/if}
+      {#if h.kind === "sftp"}<Icon name="folder" size={15} /> {t("hosts.menu.openBrowser")}{:else}<Icon name="terminal" size={15} /> {t("hosts.menu.openTerminal")}{/if}
     </button>
     <button role="menuitem" onclick={() => act((x) => openSession(x, other(x)))}>
-      {#if other(h) === "sftp"}<Icon name="folder" size={15} /> Ouvrir en SFTP{:else}<Icon name="terminal" size={15} /> Ouvrir un terminal SSH{/if}
+      {#if other(h) === "sftp"}<Icon name="folder" size={15} /> {t("menu.openSftp")}{:else}<Icon name="terminal" size={15} /> {t("menu.openSsh")}{/if}
     </button>
     <div class="sep"></div>
-    <button role="menuitem" onclick={() => act((x) => (editing = x))}><Icon name="edit" size={15} /> Modifier</button>
-    <button role="menuitem" onclick={() => act((x) => (duplicating = x))}><Icon name="copy" size={15} /> Dupliquer</button>
+    <button role="menuitem" onclick={() => act((x) => (editing = x))}><Icon name="edit" size={15} /> {t("hosts.menu.edit")}</button>
+    <button role="menuitem" onclick={() => act((x) => (duplicating = x))}><Icon name="copy" size={15} /> {t("hosts.menu.duplicate")}</button>
     <div class="sep"></div>
-    <button role="menuitem" class="danger" onclick={() => act((x) => (deleting = x))}><Icon name="trash" size={15} /> Supprimer</button>
+    <button role="menuitem" class="danger" onclick={() => act((x) => (deleting = x))}><Icon name="trash" size={15} /> {t("common.delete")}</button>
   </div>
 {/if}
 
@@ -245,8 +246,8 @@
 
 {#if deleting}
   <ConfirmDialog
-    title="Supprimer l'hôte ?"
-    message="« {deleting.label} » sera retiré du coffre. Les identités associées sont conservées."
+    title={t("hosts.deleteTitle")}
+    message={t("hosts.deleteMessage", { name: deleting.label })}
     onconfirm={confirmDelete}
     onclose={() => (deleting = null)}
   />

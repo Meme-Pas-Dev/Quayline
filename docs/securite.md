@@ -44,9 +44,8 @@ Points relevés lors de la revue de sécurité de la v1, acceptés en connaissan
   d'une clé FIDO2, changez donc le mot de passe maître**, puis réenregistrez les clés
   restantes.
 - **Signature des paquets.** Le RPM et les empreintes (RPM et Flatpak) sont signés par
-  une clé GPG propre au projet (clé publique : `packaging/signing-key.asc`) ; les
-  scripts d'installation vérifient la signature et refusent un paquet non signé ou signé
-  par une autre clé. L'application macOS est signée (Developer ID) et notarisée par
+  une clé GPG propre au projet (clé publique : `packaging/signing-key.asc`) ; la
+  vérification avant installation est décrite dans le README. L'application macOS est signée (Developer ID) et notarisée par
   Apple. La confiance repose sur ces clés, rangées dans des secrets GitHub : quelqu'un
   qui contrôlerait à la fois le dépôt et ses secrets pourrait signer. Les paquets
   publiés sont construits à partir des étiquettes de version, jamais d'une pull request.

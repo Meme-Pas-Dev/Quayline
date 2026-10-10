@@ -24,6 +24,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Semaphore;
 use uuid::Uuid;
 
+use crate::i18n::tr;
 use crate::error::{CmdError, CmdResult};
 use crate::ssh::{self, Asker, HostKeyVerifier, SessionEvent, Target};
 
@@ -53,7 +54,7 @@ pub struct SftpManager {
 impl SftpManager {
     fn get(&self, id: Uuid) -> CmdResult<(Arc<SftpSession>, Arc<Semaphore>)> {
         let conns = self.conns.lock().unwrap_or_else(|p| p.into_inner());
-        let c = conns.get(&id).ok_or_else(|| CmdError::new("no_session", "Connexion SFTP fermée."))?;
+        let c = conns.get(&id).ok_or_else(|| CmdError::new("no_session", tr!("err.sftp.closed")))?;
         Ok((c.sftp.clone(), c.limiter.clone()))
     }
 
@@ -114,7 +115,7 @@ fn validate_new_name(name: &str) -> CmdResult<()> {
     if safe_name(name) && name.chars().count() <= 255 {
         Ok(())
     } else {
-        Err(CmdError::invalid("Nom invalide (pas de « / », ni « . » ou « .. »)."))
+        Err(CmdError::invalid(tr!("err.sftp.badName")))
     }
 }
 
@@ -132,11 +133,11 @@ fn mode_string(mode: u32) -> String {
 }
 
 fn sftp_err(e: russh_sftp::client::error::Error) -> CmdError {
-    CmdError::new("sftp", format!("Erreur SFTP : {e}"))
+    CmdError::new("sftp", tr!("err.sftp.generic", detail = e))
 }
 
 fn io_err(e: std::io::Error) -> CmdError {
-    CmdError::new("io", format!("Erreur locale : {e}"))
+    CmdError::new("io", tr!("err.sftp.local", detail = e))
 }
 
 fn sort_entries(entries: &mut [FileEntry]) {
@@ -161,7 +162,7 @@ pub fn sftp_open(app: AppHandle, host_id: Uuid, events: Channel<SessionEvent>) -
                 if manager.lock_generation.load(Ordering::Acquire) != generation {
                     drop(conns);
                     let _ = events.send(SessionEvent::Closed {
-                        error: Some("Connexion abandonnée : le coffre a été verrouillé.".into()),
+                        error: Some(tr!("err.sftp.lockedAbort")),
                     });
                     return;
                 }
@@ -185,12 +186,12 @@ async fn connect(
     target: Target,
 ) -> Result<(SftpSession, client::Handle<HostKeyVerifier>, String), String> {
     let session = ssh::establish(asker, target).await?;
-    let channel = session.channel_open_session().await.map_err(|e| format!("Ouverture du canal impossible : {e}"))?;
+    let channel = session.channel_open_session().await.map_err(|e| tr!("err.ssh.channel", detail = e))?;
     channel
         .request_subsystem(true, "sftp")
         .await
-        .map_err(|e| format!("Le serveur refuse SFTP : {e}"))?;
-    let sftp = SftpSession::new(channel.into_stream()).await.map_err(|e| format!("Initialisation SFTP impossible : {e}"))?;
+        .map_err(|e| tr!("err.sftp.refused", detail = e))?;
+    let sftp = SftpSession::new(channel.into_stream()).await.map_err(|e| tr!("err.sftp.init", detail = e))?;
     let home = sftp.canonicalize(".").await.unwrap_or_else(|_| "/".into());
     Ok((sftp, session, home))
 }
@@ -339,7 +340,7 @@ pub async fn local_list(path: String) -> CmdResult<Vec<FileEntry>> {
         Ok(entries)
     })
     .await
-    .map_err(|_| CmdError::new("internal", "Tâche interrompue."))?
+    .map_err(|_| CmdError::new("internal", tr!("err.interrupted")))?
 }
 
 #[tauri::command]
@@ -357,10 +358,10 @@ pub fn local_mkdir(dir: String, name: String) -> CmdResult<()> {
 pub fn local_rename(path: String, new_name: String) -> CmdResult<()> {
     validate_new_name(&new_name)?;
     let p = PathBuf::from(&path);
-    let parent = p.parent().ok_or_else(|| CmdError::invalid("Chemin invalide."))?;
+    let parent = p.parent().ok_or_else(|| CmdError::invalid(tr!("err.sftp.badPath")))?;
     let target = parent.join(new_name);
     if target.exists() {
-        return Err(CmdError::invalid("Un élément porte déjà ce nom."));
+        return Err(CmdError::invalid(tr!("err.sftp.exists")));
     }
     std::fs::rename(&p, target).map_err(io_err)
 }
@@ -368,7 +369,7 @@ pub fn local_rename(path: String, new_name: String) -> CmdResult<()> {
 /// Les fichiers locaux vont à la corbeille (récupérables), jamais supprimés définitivement.
 #[tauri::command]
 pub fn local_trash(paths: Vec<String>) -> CmdResult<()> {
-    trash::delete_all(&paths).map_err(|e| CmdError::new("io", format!("Mise à la corbeille impossible : {e}")))
+    trash::delete_all(&paths).map_err(|e| CmdError::new("io", tr!("err.sftp.trash", detail = e)))
 }
 
 // ───────────────────────────── Transferts ─────────────────────────────
@@ -534,10 +535,10 @@ fn upload_item<'a>(
         if job.cancelled() {
             return Err(CANCELLED.into());
         }
-        let meta = tokio::fs::symlink_metadata(src).await.map_err(|e| format!("{} : {e}", src.display()))?;
+        let meta = tokio::fs::symlink_metadata(src).await.map_err(|e| tr!("err.sftp.pathError", path = src.display(), detail = e))?;
         if meta.is_dir() {
             if !job.sftp.try_exists(dest).await.unwrap_or(false) {
-                job.sftp.create_dir(dest).await.map_err(|e| format!("Création de {dest} : {e}"))?;
+                job.sftp.create_dir(dest).await.map_err(|e| tr!("err.sftp.create", path = dest, detail = e))?;
             }
             let mut rd = tokio::fs::read_dir(src).await.map_err(|e| e.to_string())?;
             while let Some(entry) = rd.next_entry().await.map_err(|e| e.to_string())? {
@@ -561,8 +562,8 @@ async fn upload_file(job: &mut Job, src: &Path, dest: &str, size: u64) -> Result
         job.advance(size);
         return Ok(());
     }
-    let mut input = tokio::fs::File::open(src).await.map_err(|e| format!("{} : {e}", src.display()))?;
-    let mut output = job.sftp.create(dest).await.map_err(|e| format!("Écriture de {dest} : {e}"))?;
+    let mut input = tokio::fs::File::open(src).await.map_err(|e| tr!("err.sftp.pathError", path = src.display(), detail = e))?;
+    let mut output = job.sftp.create(dest).await.map_err(|e| tr!("err.sftp.writing", path = dest, detail = e))?;
     let mut buf = vec![0u8; CHUNK];
     loop {
         if job.cancelled() {
@@ -574,10 +575,10 @@ async fn upload_file(job: &mut Job, src: &Path, dest: &str, size: u64) -> Result
         if n == 0 {
             break;
         }
-        output.write_all(&buf[..n]).await.map_err(|e| format!("Écriture de {dest} : {e}"))?;
+        output.write_all(&buf[..n]).await.map_err(|e| tr!("err.sftp.writing", path = dest, detail = e))?;
         job.advance(n as u64);
     }
-    output.shutdown().await.map_err(|e| format!("Écriture de {dest} : {e}"))?;
+    output.shutdown().await.map_err(|e| tr!("err.sftp.writing", path = dest, detail = e))?;
     job.files += 1;
     Ok(())
 }
@@ -634,7 +635,7 @@ fn download_limit(size: u64) -> u64 {
 
 async fn download(job: &mut Job, source: &str, local_dir: &str, name: &str) -> Result<(), String> {
     if !safe_name(name) {
-        return Err(format!("Nom de fichier refusé : « {name} »."));
+        return Err(tr!("err.sftp.refusedName", name = name));
     }
     job.total = remote_size(&job.sftp.clone(), source, &job.cancel.clone(), 0).await;
     download_item(job, source, &Path::new(local_dir).join(name), 0).await
@@ -651,21 +652,21 @@ fn download_item<'a>(
             return Err(CANCELLED.into());
         }
         if depth > MAX_SIZE_DEPTH {
-            return Err(format!("{src} : arborescence trop profonde (plus de {MAX_SIZE_DEPTH} niveaux)."));
+            return Err(tr!("err.sftp.tooDeep", path = src, count = MAX_SIZE_DEPTH));
         }
-        let meta = job.sftp.symlink_metadata(src).await.map_err(|e| format!("{src} : {e}"))?;
+        let meta = job.sftp.symlink_metadata(src).await.map_err(|e| tr!("err.sftp.pathError", path = src, detail = e))?;
         let ft = meta.file_type();
         if ft.is_dir() {
             match tokio::fs::symlink_metadata(dest).await {
                 Ok(m) if m.is_dir() => {}
-                Ok(_) => return Err(format!("{} existe et n'est pas un dossier.", dest.display())),
-                Err(_) => tokio::fs::create_dir(dest).await.map_err(|e| format!("{} : {e}", dest.display()))?,
+                Ok(_) => return Err(tr!("err.sftp.notDir", path = dest.display())),
+                Err(_) => tokio::fs::create_dir(dest).await.map_err(|e| tr!("err.sftp.pathError", path = dest.display(), detail = e))?,
             }
             let entries: Vec<String> = job
                 .sftp
                 .read_dir(src)
                 .await
-                .map_err(|e| format!("{src} : {e}"))?
+                .map_err(|e| tr!("err.sftp.pathError", path = src, detail = e))?
                 .map(|e| e.file_name())
                 .collect();
             for name in entries {
@@ -699,13 +700,13 @@ async fn download_file(job: &mut Job, src: &str, dest: &Path, size: u64) -> Resu
         dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(),
         &job.id.simple().to_string()[..8]
     ));
-    let mut input = job.sftp.open(src).await.map_err(|e| format!("Lecture de {src} : {e}"))?;
+    let mut input = job.sftp.open(src).await.map_err(|e| tr!("err.sftp.reading", path = src, detail = e))?;
     let mut output = tokio::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&part)
         .await
-        .map_err(|e| format!("{} : {e}", dest.display()))?;
+        .map_err(|e| tr!("err.sftp.pathError", path = dest.display(), detail = e))?;
     let mut buf = vec![0u8; CHUNK];
     let limit = download_limit(size);
     let result: Result<(), String> = async {
@@ -715,17 +716,15 @@ async fn download_file(job: &mut Job, src: &str, dest: &Path, size: u64) -> Resu
                 return Err(CANCELLED.into());
             }
             let n = match tokio::time::timeout(READ_STALL, input.read(&mut buf)).await {
-                Err(_) => return Err(format!("Lecture de {src} : le serveur ne répond plus.")),
-                Ok(r) => r.map_err(|e| format!("Lecture de {src} : {e}"))?,
+                Err(_) => return Err(tr!("err.sftp.readTimeout", path = src)),
+                Ok(r) => r.map_err(|e| tr!("err.sftp.reading", path = src, detail = e))?,
             };
             if n == 0 {
                 break;
             }
             received += n as u64;
             if received > limit {
-                return Err(format!(
-                    "Lecture de {src} : le serveur envoie bien plus de données qu'annoncé ({size} octets), téléchargement interrompu."
-                ));
+                return Err(tr!("err.sftp.tooMuch", path = src, size = size));
             }
             output.write_all(&buf[..n]).await.map_err(|e| e.to_string())?;
             job.advance(n as u64);
@@ -737,7 +736,7 @@ async fn download_file(job: &mut Job, src: &str, dest: &Path, size: u64) -> Resu
     drop(output);
     match result {
         Ok(()) => {
-            tokio::fs::rename(&part, dest).await.map_err(|e| format!("{} : {e}", dest.display()))?;
+            tokio::fs::rename(&part, dest).await.map_err(|e| tr!("err.sftp.pathError", path = dest.display(), detail = e))?;
             job.files += 1;
             Ok(())
         }

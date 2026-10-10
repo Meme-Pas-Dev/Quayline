@@ -1,4 +1,6 @@
 use serde::Serialize;
+
+use crate::i18n::tr;
 use vault::Error as VaultError;
 
 /// Erreur renvoyée à l'interface : un code stable pour la logique,
@@ -15,7 +17,7 @@ impl CmdError {
     }
 
     pub fn locked() -> Self {
-        Self::new("locked", "Le coffre est verrouillé.")
+        Self::new("locked", tr!("err.locked"))
     }
 
     pub fn invalid(message: impl Into<String>) -> Self {
@@ -23,23 +25,26 @@ impl CmdError {
     }
 
     pub fn not_found() -> Self {
-        Self::new("not_found", "Élément introuvable.")
+        Self::new("not_found", tr!("err.notFound"))
     }
 }
 
 impl From<VaultError> for CmdError {
     fn from(e: VaultError) -> Self {
-        let code = match e {
-            VaultError::NotFound => "vault_missing",
-            VaultError::AlreadyExists => "vault_exists",
-            VaultError::InvalidCredentials => "bad_password",
-            VaultError::WeakPassword => "weak_password",
-            VaultError::Tampered => "tampered",
-            VaultError::Corrupt(_) | VaultError::UnsupportedVersion(_) => "corrupt",
-            VaultError::TooManySlots => "invalid",
-            VaultError::Crypto | VaultError::Io(_) => "internal",
-        };
-        Self::new(code, e.to_string())
+        // Messages dans la langue de l'interface ; le détail technique (corruption,
+        // entrée/sortie) reste celui du coffre, en anglais.
+        match e {
+            VaultError::NotFound => Self::new("vault_missing", tr!("err.vault.missing")),
+            VaultError::AlreadyExists => Self::new("vault_exists", tr!("err.vault.exists")),
+            VaultError::InvalidCredentials => Self::new("bad_password", tr!("err.vault.badPassword")),
+            VaultError::WeakPassword => Self::new("weak_password", tr!("err.vault.weak", count = vault::MIN_PASSWORD_LEN)),
+            VaultError::Tampered => Self::new("tampered", tr!("err.vault.tampered")),
+            VaultError::Corrupt(detail) => Self::new("corrupt", tr!("err.vault.corrupt", detail = detail)),
+            VaultError::UnsupportedVersion(v) => Self::new("corrupt", tr!("err.vault.version", version = v)),
+            VaultError::TooManySlots => Self::new("invalid", tr!("err.vault.tooManySlots")),
+            VaultError::Crypto => Self::new("internal", tr!("err.vault.crypto")),
+            VaultError::Io(io) => Self::new("internal", tr!("err.vault.io", detail = io)),
+        }
     }
 }
 

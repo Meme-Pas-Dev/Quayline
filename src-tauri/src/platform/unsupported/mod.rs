@@ -10,14 +10,13 @@ pub mod keyring {
 
     use crate::platform::SecretRef;
 
-    const UNSUPPORTED: &str = "Trousseau système non pris en charge sur ce système.";
 
     pub async fn store(_label: &str, _r: &SecretRef<'_>, _secret: &[u8]) -> Result<(), String> {
-        Err(UNSUPPORTED.into())
+        Err(crate::i18n::tr!("err.keyring.unsupported"))
     }
 
     pub async fn load(_label: &str, _r: &SecretRef<'_>) -> Result<Option<Zeroizing<Vec<u8>>>, String> {
-        Err(UNSUPPORTED.into())
+        Err(crate::i18n::tr!("err.keyring.unsupported"))
     }
 
     pub async fn delete(_r: &SecretRef<'_>) {}

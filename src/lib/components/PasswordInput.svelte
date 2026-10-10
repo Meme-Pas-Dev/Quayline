@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { t } from "../i18n/index.svelte";
   import Icon from "./Icon.svelte";
 
   let {
@@ -37,7 +38,7 @@
     type="button"
     class="toggle"
     onclick={() => (visible = !visible)}
-    aria-label={visible ? "Masquer" : "Afficher"}
+    aria-label={visible ? t("common.hide") : t("common.show")}
     tabindex="-1"
   >
     <Icon name={visible ? "eyeOff" : "eye"} size={16} />

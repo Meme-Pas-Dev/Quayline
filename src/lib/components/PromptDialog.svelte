@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.svelte";
   import Modal from "./Modal.svelte";
 
   // Petite boîte de saisie (nouveau dossier, renommer…).
@@ -6,7 +7,7 @@
     title,
     label,
     initial = "",
-    confirmLabel = "Valider",
+    confirmLabel = t("common.confirm"),
     onsubmit,
     onclose,
   }: {
@@ -46,7 +47,7 @@
     </label>
   </form>
   {#snippet footer()}
-    <button class="btn" onclick={onclose}>Annuler</button>
+    <button class="btn" onclick={onclose}>{t("common.cancel")}</button>
     <button class="btn primary" type="submit" form="prompt-dialog" disabled={!value.trim()}>{confirmLabel}</button>
   {/snippet}
 </Modal>

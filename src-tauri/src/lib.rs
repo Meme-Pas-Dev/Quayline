@@ -3,6 +3,7 @@ mod clipboard;
 mod commands;
 mod error;
 mod fido2;
+mod i18n;
 mod identity;
 mod oidc;
 mod platform;
@@ -41,7 +42,7 @@ fn migrate_data_dir(dir: &std::path::Path) {
     for old_id in identity::migrate_from() {
         let old = parent.join(old_id).join(VAULT_FILE);
         if old.is_file() && std::fs::rename(&old, &target).is_ok() {
-            eprintln!("{} : coffre repris depuis {}", identity::SLUG, old.display());
+            eprintln!("{}: vault taken over from {}", identity::SLUG, old.display());
             return;
         }
     }
@@ -75,7 +76,7 @@ pub fn run() {
     glib::set_prgname(Some(if identity::is_flatpak() { identity::ID } else { identity::NAME }));
 
     let builder = tauri::Builder::default();
-    // macOS : menu de l'application en français (celui de Tauri est en anglais).
+    // macOS : menu de l'application traduit (celui de Tauri est en anglais).
     #[cfg(target_os = "macos")]
     let builder = builder.menu(platform::menu::build);
     builder
@@ -136,6 +137,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
+            i18n::set_language,
             commands::vault_status,
             commands::vault_create,
             commands::vault_unlock,

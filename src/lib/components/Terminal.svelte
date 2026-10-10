@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.svelte";
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
   import { FitAddon } from "@xterm/addon-fit";
   import { WebglAddon } from "@xterm/addon-webgl";
@@ -72,7 +73,7 @@
         tab.error = e.error;
         prompts.reset();
         sessionId = null;
-        term?.write(`\r\n\x1b[2m── ${e.error ? "Connexion interrompue" : "Session terminée"} ──\x1b[0m\r\n`);
+        term?.write(`\r\n\x1b[2m── ${t(e.error ? "terminal.interrupted" : "terminal.ended")} ──\x1b[0m\r\n`);
         break;
     }
   }
@@ -219,10 +220,10 @@
   {#if menu}
     <div class="menu" style:left="{menu.x}px" style:top="{menu.y}px" role="menu">
       <button disabled={!menu.hasSelection} onclick={() => menuAction(copySelection)}>
-        <Icon name="copy" size={15} /> Copier <kbd>{KEYS.copy}</kbd>
+        <Icon name="copy" size={15} /> {t("common.copy")} <kbd>{KEYS.copy}</kbd>
       </button>
       <button onclick={() => menuAction(paste)}>
-        <Icon name="clipboard" size={15} /> Coller <kbd>{KEYS.paste}</kbd>
+        <Icon name="clipboard" size={15} /> {t("terminal.paste")} <kbd>{KEYS.paste}</kbd>
       </button>
       <button onclick={() => menuAction(() => term?.selectAll())}>
         <Icon name="check" size={15} /> Tout sélectionner
@@ -245,7 +246,7 @@
         <div class="card">
           <span class="spinner"></span>
           <div>
-            <strong>{tab.status === "connecting" ? "Connexion" : "Authentification"}…</strong>
+            <strong>{t(tab.status === "connecting" ? "session.status.connecting" : "session.status.authenticating")}</strong>
             <span class="mono">{host ? `${host.hostname}:${host.port}` : ""}</span>
           </div>
         </div>
@@ -254,10 +255,10 @@
   {:else if tab.status === "closed"}
     <div class="closed-bar" class:error={!!tab.error}>
       <Icon name={tab.error ? "alert" : "check"} size={16} />
-      <span>{tab.error ?? "Session terminée."}</span>
+      <span>{tab.error ?? t("terminal.endedDot")}</span>
       <div class="spacer"></div>
-      <button class="btn" onclick={() => reconnect(tab.key)}>Reconnecter</button>
-      <button class="btn ghost" onclick={() => closeSession(tab.key)}>Fermer l'onglet</button>
+      <button class="btn" onclick={() => reconnect(tab.key)}>{t("menu.reconnect")}</button>
+      <button class="btn ghost" onclick={() => closeSession(tab.key)}>{t("terminal.closeTab")}</button>
     </div>
   {/if}
 </div>

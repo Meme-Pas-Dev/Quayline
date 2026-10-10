@@ -13,25 +13,25 @@ pub use vault::{check_password_policy, Fido2Binding, KdfParams, OidcBinding, Vau
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Aucun coffre trouvé.")]
+    #[error("No vault found.")]
     NotFound,
-    #[error("Un coffre existe déjà à cet emplacement.")]
+    #[error("A vault already exists at this location.")]
     AlreadyExists,
-    #[error("Mot de passe incorrect.")]
+    #[error("Incorrect password.")]
     InvalidCredentials,
-    #[error("Le mot de passe doit contenir au moins {MIN_PASSWORD_LEN} caractères.")]
+    #[error("The password must contain at least {MIN_PASSWORD_LEN} characters.")]
     WeakPassword,
-    #[error("Le coffre a été altéré : son intégrité n'est plus garantie.")]
+    #[error("The vault has been tampered with: its integrity is no longer guaranteed.")]
     Tampered,
-    #[error("Coffre corrompu : {0}.")]
+    #[error("Corrupted vault: {0}.")]
     Corrupt(&'static str),
-    #[error("Version de coffre non prise en charge : {0}.")]
+    #[error("Unsupported vault version: {0}.")]
     UnsupportedVersion(u32),
-    #[error("Nombre maximal de moyens de déverrouillage atteint.")]
+    #[error("Maximum number of unlock methods reached.")]
     TooManySlots,
-    #[error("Erreur cryptographique.")]
+    #[error("Cryptographic error.")]
     Crypto,
-    #[error("Erreur d'entrée/sortie : {0}")]
+    #[error("Input/output error: {0}")]
     Io(#[from] std::io::Error),
 }
 

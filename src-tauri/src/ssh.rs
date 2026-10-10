@@ -23,6 +23,7 @@ use vault::{KnownHost, Secret};
 use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
+use crate::i18n::tr;
 use crate::error::{CmdError, CmdResult};
 use crate::state::AppState;
 
@@ -102,8 +103,8 @@ pub struct SshManager {
 impl SshManager {
     fn send(&self, id: Uuid, msg: Control) -> CmdResult<()> {
         let sessions = self.sessions.lock().unwrap_or_else(|p| p.into_inner());
-        let tx = sessions.get(&id).ok_or_else(|| CmdError::new("no_session", "Session fermée."))?;
-        tx.send(msg).map_err(|_| CmdError::new("no_session", "Session fermée."))
+        let tx = sessions.get(&id).ok_or_else(|| CmdError::new("no_session", tr!("err.ssh.sessionClosed")))?;
+        tx.send(msg).map_err(|_| CmdError::new("no_session", tr!("err.ssh.sessionClosed")))
     }
 
     pub fn write(&self, id: Uuid, data: Vec<u8>) -> CmdResult<()> {
@@ -286,7 +287,7 @@ pub(crate) async fn establish(asker: &Asker, target: Target) -> Result<client::H
     )
     .await
     {
-        Err(_) => return Err(format!("Délai dépassé : {}:{} ne répond pas.", target.hostname, target.port)),
+        Err(_) => return Err(tr!("err.ssh.timeout", host = target.hostname, port = target.port)),
         Ok(Err(e)) => return Err(describe_io_error(&e, &target)),
         Ok(Ok(stream)) => stream,
     };
@@ -299,14 +300,14 @@ pub(crate) async fn establish(asker: &Asker, target: Target) -> Result<client::H
         port: target.port,
         rejection: rejection.clone(),
     };
-    let stalled = format!("Délai dépassé : {}:{} ne termine pas la connexion SSH.", target.hostname, target.port);
+    let stalled = tr!("err.ssh.stalled", host = target.hostname, port = target.port);
     let handshake_and_auth = async {
         let mut session = match client::connect_stream(config, stream, handler).await {
             Ok(s) => s,
             Err(e) => {
                 let reason = rejection.lock().unwrap_or_else(|p| p.into_inner()).take();
                 return Err(reason.unwrap_or_else(|| {
-                    format!("Échec de la négociation SSH avec {}:{} : {e}.", target.hostname, target.port)
+                    tr!("err.ssh.handshake", host = target.hostname, port = target.port, detail = e)
                 }));
             }
         };
@@ -359,12 +360,12 @@ async fn run(
     data: &Channel<InvokeResponseBody>,
 ) -> Result<(), String> {
     let session = establish(&asker, target).await?;
-    let channel = session.channel_open_session().await.map_err(|e| format!("Ouverture du canal impossible : {e}"))?;
+    let channel = session.channel_open_session().await.map_err(|e| tr!("err.ssh.channel", detail = e))?;
     channel
         .request_pty(false, TERM, cols, rows, 0, 0, &[])
         .await
-        .map_err(|e| format!("Pseudo-terminal refusé : {e}"))?;
-    channel.request_shell(false).await.map_err(|e| format!("Shell refusé : {e}"))?;
+        .map_err(|e| tr!("err.ssh.pty", detail = e))?;
+    channel.request_shell(false).await.map_err(|e| tr!("err.ssh.shell", detail = e))?;
     let (mut reader, writer) = channel.split();
     let _ = events.send(SessionEvent::Connected);
 
@@ -399,12 +400,12 @@ async fn run(
 fn describe_io_error(e: &std::io::Error, target: &Target) -> String {
     match e.kind() {
         std::io::ErrorKind::ConnectionRefused => {
-            format!("Connexion refusée par {}:{} (aucun serveur SSH sur ce port ?).", target.hostname, target.port)
+            tr!("err.ssh.refused", host = target.hostname, port = target.port)
         }
         _ if e.to_string().contains("failed to lookup address") || e.kind() == std::io::ErrorKind::NotFound => {
-            format!("Hôte introuvable : {}.", target.hostname)
+            tr!("err.ssh.unknownHost", host = target.hostname)
         }
-        _ => format!("Connexion impossible à {}:{} : {e}.", target.hostname, target.port),
+        _ => tr!("err.ssh.connect", host = target.hostname, port = target.port, detail = e),
     }
 }
 
@@ -420,21 +421,21 @@ async fn authenticate(
         None => {
             let answer = asker
                 .input(
-                    "Nom d'utilisateur",
-                    &format!("Avec quel compte se connecter à {} ?", target.hostname),
-                    vec![InputField { label: "Utilisateur".into(), secret: false }],
+                    &tr!("ssh.prompt.username"),
+                    &tr!("ssh.prompt.whichAccount", host = target.hostname),
+                    vec![InputField { label: tr!("ssh.prompt.user"), secret: false }],
                 )
                 .await
-                .ok_or("Connexion annulée.")?;
+                .ok_or_else(|| tr!("err.ssh.cancelled"))?;
             let user = answer[0].expose().trim().to_string();
             if user.is_empty() {
-                return Err("Nom d'utilisateur vide.".into());
+                return Err(tr!("err.ssh.emptyUser"));
             }
             user
         }
     };
-    let cancelled = || "Connexion annulée.".to_string();
-    let ssh_err = |e: russh::Error| format!("Erreur pendant l'authentification : {e}");
+    let cancelled = || tr!("err.ssh.cancelled");
+    let ssh_err = |e: russh::Error| tr!("err.ssh.auth", detail = e);
 
     // 1. Clé privée.
     if let Some(pem) = &target.private_key {
@@ -476,8 +477,9 @@ async fn authenticate(
                     stored_password_used = true;
                     vec![target.password.as_ref().map(|p| p.expose().to_string()).unwrap_or_default()]
                 } else {
+                    // Titre du serveur, vide s'il n'en donne pas (l'interface affiche alors
+                    // le sien, traduit).
                     let title = server_text(&name, 80);
-                    let title = if title.is_empty() { "Authentification".to_string() } else { title };
                     let message = server_text(&instructions, 600);
                     let fields = prompts
                         .iter()
@@ -497,17 +499,18 @@ async fn authenticate(
     // 4. Mot de passe saisi.
     for attempt in 0..MAX_PROMPT_ATTEMPTS {
         let message = if attempt == 0 {
-            format!("Mot de passe de {username}@{}", target.hostname)
+            tr!("ssh.prompt.passwordFor", user = username, host = target.hostname)
         } else {
-            "Mot de passe refusé, réessayez.".to_string()
+            tr!("ssh.prompt.passwordRetry")
         };
-        let password = asker.secret("Mot de passe", &message, "Mot de passe").await.ok_or_else(cancelled)?;
+        let label = tr!("ssh.prompt.password");
+        let password = asker.secret(&label, &message, &label).await.ok_or_else(cancelled)?;
         let res = session.authenticate_password(&username, password.expose()).await.map_err(ssh_err)?;
         if res.success() {
             return Ok(());
         }
     }
-    Err("Authentification refusée par le serveur.".into())
+    Err(tr!("err.ssh.authRefused"))
 }
 
 fn is_password_prompt(prompt: &str) -> bool {
@@ -522,15 +525,16 @@ async fn load_key(pem: &Secret, stored: Option<&Secret>, asker: &Asker) -> Resul
         Ok(key) => return Ok(Some(key)),
         Err(russh::keys::Error::KeyIsEncrypted) => {}
         Err(_) if stored.is_some() => {}
-        Err(e) => return Err(format!("Clé privée inutilisable : {e}")),
+        Err(e) => return Err(tr!("err.ssh.keyUnusable", detail = e)),
     }
     for attempt_no in 0..MAX_PROMPT_ATTEMPTS {
         let message = if attempt_no == 0 {
-            "Cette clé est protégée par une phrase de passe.".to_string()
+            tr!("ssh.prompt.keyProtected")
         } else {
-            "Phrase de passe incorrecte, réessayez.".to_string()
+            tr!("ssh.prompt.passphraseRetry")
         };
-        let Some(pass) = asker.secret("Phrase de passe", &message, "Phrase de passe").await else {
+        let label = tr!("ssh.prompt.passphrase");
+        let Some(pass) = asker.secret(&label, &message, &label).await else {
             return Ok(None); // L'utilisateur passe : on essaie les autres méthodes.
         };
         if let Ok(key) = attempt(Some(pass.expose())) {
@@ -620,9 +624,9 @@ impl client::Handler for HostKeyVerifier {
         };
         if !approved {
             let reason = if changed {
-                "Connexion interrompue : la clé du serveur a changé et n'a pas été approuvée."
+                tr!("err.ssh.hostKeyChanged")
             } else {
-                "Connexion annulée : clé du serveur non approuvée."
+                tr!("err.ssh.hostKeyRejected")
             };
             return self.reject(reason);
         }

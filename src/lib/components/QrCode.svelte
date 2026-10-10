@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.svelte";
   import type { QrMatrix } from "../api";
 
   let { qr, size = 200 }: { qr: QrMatrix; size?: number } = $props();
@@ -24,7 +25,7 @@
   viewBox="0 0 {qr.size + QUIET * 2} {qr.size + QUIET * 2}"
   shape-rendering="crispEdges"
   role="img"
-  aria-label="QR code de connexion"
+  aria-label={t("qr.label")}
 >
   <rect width="100%" height="100%" fill="#fff" />
   <path d={path} fill="#000" />

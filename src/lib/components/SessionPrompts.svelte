@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.svelte";
   import { api, type SessionEvent } from "../api";
   import type { SessionTab } from "../store.svelte";
   import Icon from "./Icon.svelte";
@@ -74,7 +75,7 @@
 
 {#if visible && hostKeyPrompt}
   <Modal
-    title={hostKeyPrompt.changed ? "La clé du serveur a changé" : "Nouveau serveur"}
+    title={t(hostKeyPrompt.changed ? "hostKey.changedTitle" : "hostKey.newTitle")}
     onclose={() => answerHostKey(false)}
     width={520}
   >
@@ -82,25 +83,26 @@
       <div class="alert">
         <Icon name="alert" size={20} />
         <p>
-          La clé présentée par <strong>{hostKeyPrompt.hostname}:{hostKeyPrompt.port}</strong> ne correspond pas à celle
-          enregistrée. Cela peut indiquer une <strong>attaque de l'homme du milieu</strong>, ou une réinstallation du
-          serveur. N'acceptez que si vous savez pourquoi elle a changé.
+          {t("hostKey.changed.before")}<strong>{hostKeyPrompt.hostname}:{hostKeyPrompt.port}</strong>{t("hostKey.changed.middle")}<strong
+            >{t("hostKey.changed.mitm")}</strong
+          >{t("hostKey.changed.after")}
         </p>
       </div>
       <div class="fp-block">
-        <span>Ancienne empreinte</span>
+        <span>{t("hostKey.oldFingerprint")}</span>
         <code>{hostKeyPrompt.previousFingerprint}</code>
-        <span>Nouvelle empreinte ({hostKeyPrompt.algorithm})</span>
+        <span>{t("hostKey.newFingerprint", { algorithm: hostKeyPrompt.algorithm })}</span>
         <code class="new">{hostKeyPrompt.fingerprint}</code>
       </div>
       <label class="ack">
         <input type="checkbox" bind:checked={acknowledgeChange} />
-        Je sais pourquoi la clé a changé et j'ai vérifié la nouvelle empreinte.
+        {t("hostKey.ack")}
       </label>
     {:else}
       <p class="muted">
-        Première connexion à <strong>{hostKeyPrompt.hostname}:{hostKeyPrompt.port}</strong>. Vérifiez que l'empreinte
-        correspond à celle du serveur (<code>ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub</code>) avant de l'approuver.
+        {t("hostKey.first.before")}<strong>{hostKeyPrompt.hostname}:{hostKeyPrompt.port}</strong>{t("hostKey.first.middle")}<code
+          >ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub</code
+        >{t("hostKey.first.after")}
       </p>
       <div class="fp-block">
         <span>{hostKeyPrompt.algorithm}</span>
@@ -110,13 +112,13 @@
     {#snippet footer()}
       {#if hostKeyPrompt?.changed}
         <button class="btn danger" disabled={!acknowledgeChange} onclick={() => answerHostKey(true)}>
-          Remplacer la clé
+          {t("hostKey.replace")}
         </button>
-        <button class="btn primary" onclick={() => answerHostKey(false)}>Interrompre</button>
+        <button class="btn primary" onclick={() => answerHostKey(false)}>{t("hostKey.abort")}</button>
       {:else}
-        <button class="btn" onclick={() => answerHostKey(false)}>Annuler</button>
+        <button class="btn" onclick={() => answerHostKey(false)}>{t("common.cancel")}</button>
         <button class="btn primary" onclick={() => answerHostKey(true)}>
-          <Icon name="shield" size={16} /> Approuver et se connecter
+          <Icon name="shield" size={16} /> {t("hostKey.approve")}
         </button>
       {/if}
     {/snippet}
@@ -125,7 +127,7 @@
 
 {#if visible && inputPrompt}
   <Modal
-    title={inputPrompt.fromServer ? "Le serveur demande une réponse" : inputPrompt.title}
+    title={inputPrompt.fromServer ? t("serverPrompt.title") : inputPrompt.title}
     onclose={() => answerInput(null)}
     width={460}
   >
@@ -141,11 +143,10 @@
         <div class="server-note">
           <Icon name="server" size={16} />
           <span>
-            Questions envoyées par <strong>{inputPrompt.fromServer}</strong>, pas par l'application. Ne saisissez
-            jamais votre mot de passe maître ici.
+            {t("serverPrompt.note.before")}<strong>{inputPrompt.fromServer}</strong>{t("serverPrompt.note.after")}
           </span>
         </div>
-        {#if inputPrompt.title !== "Authentification"}<p class="server-title">« {inputPrompt.title} »</p>{/if}
+        {#if inputPrompt.title}<p class="server-title">« {inputPrompt.title} »</p>{/if}
       {/if}
       {#if inputPrompt.message}<p class="muted server-text">{inputPrompt.message}</p>{/if}
       {#each inputPrompt.fields as field, i}
@@ -161,8 +162,8 @@
       {/each}
     </form>
     {#snippet footer()}
-      <button class="btn" onclick={() => answerInput(null)}>Annuler</button>
-      <button class="btn primary" type="submit" form="ssh-input">Valider</button>
+      <button class="btn" onclick={() => answerInput(null)}>{t("common.cancel")}</button>
+      <button class="btn primary" type="submit" form="ssh-input">{t("common.confirm")}</button>
     {/snippet}
   </Modal>
 {/if}

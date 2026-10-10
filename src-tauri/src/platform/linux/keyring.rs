@@ -5,11 +5,12 @@ use std::collections::HashMap;
 use secret_service::{EncryptionType, SecretService};
 use zeroize::Zeroizing;
 
+use crate::i18n::tr;
 use crate::identity;
 use crate::platform::SecretRef;
 
 fn err(e: secret_service::Error) -> String {
-    format!("Trousseau système indisponible ({e}). Vérifiez que KWallet (ou GNOME Keyring) est actif et ouvert.")
+    tr!("err.keyring.unavailable", detail = e)
 }
 
 fn attrs<'a>(app_id: &'a str, r: &'a SecretRef<'a>) -> HashMap<&'a str, &'a str> {

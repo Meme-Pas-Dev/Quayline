@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from "../i18n/index.svelte";
+
   let { password }: { password: string } = $props();
 
   // Estimation simple de l'entropie (longueur × taille de l'alphabet utilisé).
@@ -14,11 +16,11 @@
   });
 
   const level = $derived(bits < 50 ? 0 : bits < 70 ? 1 : bits < 90 ? 2 : 3);
-  const labels = ["Faible", "Moyen", "Bon", "Excellent"];
+  const labels = $derived([t("strength.weak"), t("strength.fair"), t("strength.good"), t("strength.excellent")]);
   const colors = ["var(--danger)", "var(--warning)", "var(--accent-2)", "var(--success)"];
 </script>
 
-<div class="meter" aria-label="Robustesse : {labels[level]}">
+<div class="meter" aria-label={t("strength.label", { level: labels[level] })}>
   <div class="bars">
     {#each [0, 1, 2, 3] as i}
       <span style:background={password && i <= level ? colors[level] : undefined}></span>

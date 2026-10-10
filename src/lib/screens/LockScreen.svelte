@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { api, errorCode, errorMessage, type OidcDeviceStart, type OidcStatus } from "../api";
+  import { t, tn } from "../i18n/index.svelte";
   import { APP_NAME } from "../identity";
+  import { providerName } from "../oidcProviders";
   import Icon from "../components/Icon.svelte";
   import Logo from "../components/Logo.svelte";
   import PasswordInput from "../components/PasswordInput.svelte";
@@ -120,7 +122,9 @@
   const countdown = $derived(`${Math.floor(deviceLeft / 60)}:${String(deviceLeft % 60).padStart(2, "0")}`);
 
   // « votre compte Keycloak », ou « votre compte » pour un fournisseur sans modèle.
-  const account = $derived(oidc && oidc.provider !== "generic" ? `votre compte ${oidc.providerName}` : "votre compte");
+  const account = $derived(
+    oidc && oidc.provider !== "generic" ? t("lock.account", { provider: providerName(oidc.provider) }) : t("lock.accountGeneric"),
+  );
 
   const canSubmit = $derived(
     mode === "unlock"
@@ -152,16 +156,16 @@
   <form class="card" onsubmit={submit}>
     <div class="head">
       <Logo size={56} />
-      <h1>{mode === "setup" ? `Bienvenue dans ${APP_NAME}` : `${APP_NAME} est verrouillé`}</h1>
+      <h1>{t(mode === "setup" ? "lock.title.setup" : "lock.title.locked", { app: APP_NAME })}</h1>
       <p>
         {#if mode === "setup"}
-          Choisissez un mot de passe maître. Il chiffre vos sessions, identifiants et clés.
+          {t("lock.subtitle.setup")}
         {:else if device}
-          Connexion depuis votre téléphone, avec {account}.
+          {t("lock.subtitle.phone", { account })}
         {:else if reason === "idle"}
-          Verrouillé après inactivité. Saisissez votre mot de passe maître.
+          {t("lock.subtitle.idle")}
         {:else}
-          Saisissez votre mot de passe maître pour déverrouiller le coffre.
+          {t("lock.subtitle.unlock")}
         {/if}
       </p>
     </div>
@@ -170,22 +174,21 @@
          ramène le mot de passe et les autres moyens. -->
     {#if !device}
       <label class="field">
-        <span>Mot de passe maître</span>
-        <PasswordInput bind:value={password} autofocus placeholder={mode === "setup" ? `${MIN_LENGTH} caractères minimum` : ""} />
+        <span>{t("lock.masterPassword")}</span>
+        <PasswordInput bind:value={password} autofocus placeholder={mode === "setup" ? t("lock.minLength", { count: MIN_LENGTH }) : ""} />
       </label>
 
       {#if mode === "setup"}
         <StrengthMeter {password} />
         <label class="field">
-          <span>Confirmation</span>
+          <span>{t("lock.confirmation")}</span>
           <PasswordInput bind:value={confirm} />
-          {#if confirm && confirm !== password}<small class="error-text">Les mots de passe ne correspondent pas.</small>{/if}
+          {#if confirm && confirm !== password}<small class="error-text">{t("lock.mismatch")}</small>{/if}
         </label>
         <label class="ack">
           <input type="checkbox" bind:checked={acknowledged} />
           <span>
-            J'ai compris qu'il n'existe <strong>aucun moyen de récupérer</strong> ce mot de passe : s'il est perdu, le
-            coffre l'est aussi.
+            {t("lock.ack.before")}<strong>{t("lock.ack.strong")}</strong>{t("lock.ack.after")}
           </span>
         </label>
       {/if}
@@ -193,7 +196,7 @@
       {#if backgroundSessions}
         <p class="sessions-note">
           <Icon name="terminal" size={14} />
-          {backgroundSessions} session{backgroundSessions > 1 ? "s restent ouvertes" : " reste ouverte"} en arrière-plan.
+          {tn("lock.backgroundSessions", backgroundSessions)}
         </p>
       {/if}
 
@@ -201,45 +204,45 @@
 
       <button class="btn primary lg" type="submit" disabled={!canSubmit || busy || oidcWaiting || keyWaiting || !!device}>
         {#if busy}
-          <span class="spinner"></span> {mode === "setup" ? "Création du coffre…" : "Déverrouillage…"}
+          <span class="spinner"></span> {t(mode === "setup" ? "lock.creating" : "lock.unlocking")}
         {:else}
           <Icon name={mode === "setup" ? "shield" : "lock"} size={17} />
-          {mode === "setup" ? "Créer le coffre" : "Déverrouiller"}
+          {t(mode === "setup" ? "lock.create" : "lock.unlock")}
         {/if}
       </button>
 
       {#if oidc || hasSecurityKey}
-        <div class="or"><span>ou</span></div>
+        <div class="or"><span>{t("common.or")}</span></div>
       {/if}
 
       {#if hasSecurityKey}
         {#if !keyOpen}
           <button type="button" class="btn lg alt" onclick={() => (keyOpen = true)} disabled={busy || oidcWaiting || !!device}>
             <Icon name="key" size={17} />
-            Utiliser une clé de sécurité
+            {t("lock.useSecurityKey")}
           </button>
         {:else}
           <div class="key-panel">
             <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
             <label class="field" onkeydown={keyPinKeydown}>
-              <span>Code PIN de la clé</span>
+              <span>{t("lock.keyPin")}</span>
               <PasswordInput bind:value={keyPin} autofocus />
             </label>
             {#if keyWaiting}
               <div class="oidc-wait">
                 <span class="spinner dark"></span>
                 <div>
-                  <strong>Touchez votre clé…</strong>
-                  <span>Elle clignote pour confirmer le déverrouillage.</span>
+                  <strong>{t("lock.touchKey")}</strong>
+                  <span>{t("lock.touchKeyHint")}</span>
                 </div>
               </div>
             {/if}
             <div class="key-actions">
               <button type="button" class="btn ghost" onclick={() => ((keyOpen = false), (keyPin = ""))} disabled={keyWaiting}>
-                Annuler
+                {t("common.cancel")}
               </button>
               <button type="button" class="btn alt" onclick={unlockWithSecurityKey} disabled={!keyPin || keyWaiting || busy}>
-                <Icon name="key" size={16} /> Déverrouiller avec la clé
+                <Icon name="key" size={16} /> {t("lock.unlockWithKey")}
               </button>
             </div>
           </div>
@@ -252,35 +255,35 @@
       {#if device}
         <div class="device">
           <QrCode qr={device.qr} size={176} />
-          <strong>Scannez ce QR code avec votre téléphone</strong>
-          <span>Connectez-vous avec {account}, après avoir vérifié que le téléphone affiche ce code :</span>
+          <strong>{t("lock.scanQr")}</strong>
+          <span>{t("lock.scanQrHint", { account })}</span>
           <code class="user-code">{device.userCode}</code>
-          <span class="faint">Sans QR code : <span class="mono">{device.verificationUri}</span></span>
-          <span class="faint">Expire dans {countdown}</span>
+          <span class="faint">{t("lock.withoutQr")}<span class="mono">{device.verificationUri}</span></span>
+          <span class="faint">{t("lock.expiresIn", { time: countdown })}</span>
           <div class="device-wait">
             <span class="spinner dark"></span>
-            <span>En attente de la validation…</span>
-            <button type="button" class="btn ghost" onclick={cancelPhone}>Annuler</button>
+            <span>{t("lock.waitingValidation")}</span>
+            <button type="button" class="btn ghost" onclick={cancelPhone}>{t("common.cancel")}</button>
           </div>
         </div>
       {:else if oidcWaiting}
         <div class="oidc-wait">
           <span class="spinner dark"></span>
           <div>
-            <strong>Connexion en cours dans votre navigateur…</strong>
-            <span>Connectez-vous avec {account}, puis revenez ici.</span>
+            <strong>{t("lock.browserWaiting")}</strong>
+            <span>{t("lock.browserWaitingHint", { account })}</span>
           </div>
-          <button type="button" class="btn ghost" onclick={() => api.oidcCancel()}>Annuler</button>
+          <button type="button" class="btn ghost" onclick={() => api.oidcCancel()}>{t("common.cancel")}</button>
         </div>
       {:else}
         <button type="button" class="btn lg alt" onclick={unlockWithProvider} disabled={busy || keyWaiting || deviceStarting}>
           <Icon name="user" size={17} />
-          Se connecter avec {oidc.providerName}
+          {oidc.provider === "generic" ? t("lock.signInWithGeneric") : t("lock.signInWith", { provider: providerName(oidc.provider) })}
         </button>
         {#if oidc.phone}
           <button type="button" class="btn ghost phone" onclick={unlockWithPhone} disabled={busy || keyWaiting || deviceStarting}>
             {#if deviceStarting}<span class="spinner dark"></span>{:else}<Icon name="phone" size={15} />{/if}
-            Avec mon téléphone (QR code)
+            {t("lock.withPhone")}
           </button>
         {/if}
         <p class="oidc-account">{oidc.account}</p>
@@ -289,7 +292,7 @@
 
     <footer>
       <Icon name="shield" size={14} />
-      Argon2id · XChaCha20-Poly1305 · chiffrement local
+      {t("lock.footer")}
     </footer>
   </form>
 </main>
@@ -406,8 +409,10 @@
     color: var(--text-faint);
     font-size: 11.5px;
   }
+  /* Adresse sur sa propre ligne, coupée seulement si elle dépasse la largeur. */
   .device .faint .mono {
-    word-break: break-all;
+    display: block;
+    overflow-wrap: anywhere;
     user-select: text;
   }
   .user-code {

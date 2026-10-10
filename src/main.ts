@@ -2,6 +2,7 @@ import { mount } from "svelte";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App.svelte";
 import { initAppearance } from "./lib/appearance";
+import { initLanguage } from "./lib/i18n/index.svelte";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "@xterm/xterm/css/xterm.css";
@@ -20,6 +21,7 @@ document.addEventListener("contextmenu", (e) => {
 });
 
 initAppearance();
+initLanguage();
 
 const app = mount(App, { target: document.getElementById("app")! });
 

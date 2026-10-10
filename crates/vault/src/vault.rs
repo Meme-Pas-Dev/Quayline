@@ -76,17 +76,17 @@ impl KdfParams {
         let ok = (8 * 1024..=1024 * 1024).contains(&self.m_cost_kib)
             && (1..=10).contains(&self.t_cost)
             && (1..=16).contains(&self.p_cost);
-        if ok { Ok(()) } else { Err(Error::Corrupt("paramètres KDF hors limites")) }
+        if ok { Ok(()) } else { Err(Error::Corrupt("KDF parameters out of bounds")) }
     }
 
     pub(crate) fn derive(&self, password: &[u8], salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>> {
         self.validate()?;
         let params = Params::new(self.m_cost_kib, self.t_cost, self.p_cost, Some(KEY_LEN))
-            .map_err(|_| Error::Corrupt("paramètres KDF invalides"))?;
+            .map_err(|_| Error::Corrupt("invalid KDF parameters"))?;
         let mut out = Zeroizing::new([0u8; KEY_LEN]);
         Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
             .hash_password_into(password, salt, out.as_mut())
-            .map_err(|_| Error::Corrupt("dérivation de clé impossible"))?;
+            .map_err(|_| Error::Corrupt("key derivation failed"))?;
         Ok(out)
     }
 }
@@ -369,7 +369,7 @@ impl Vault {
         dek: Zeroizing<[u8; KEY_LEN]>,
     ) -> Result<Self> {
         if header.nonce.len() != NONCE_LEN {
-            return Err(Error::Corrupt("nonce invalide"));
+            return Err(Error::Corrupt("invalid nonce"));
         }
         // La DEK est correcte : un échec ici signifie que le fichier a été altéré.
         let plain = Zeroizing::new(
@@ -540,25 +540,25 @@ const MAX_SLOTS: usize = 16;
 
 fn parse(raw: &[u8]) -> Result<(&[u8], Header, &[u8])> {
     if raw.len() < 12 || &raw[..8] != MAGIC {
-        return Err(Error::Corrupt("ce fichier n'est pas un coffre valide"));
+        return Err(Error::Corrupt("this file is not a valid vault"));
     }
     let header_len = u32::from_le_bytes(raw[8..12].try_into().unwrap()) as usize;
     if header_len > MAX_HEADER_LEN || raw.len() < 12 + header_len {
-        return Err(Error::Corrupt("en-tête tronqué"));
+        return Err(Error::Corrupt("truncated header"));
     }
     let header: Header =
-        serde_json::from_slice(&raw[12..12 + header_len]).map_err(|_| Error::Corrupt("en-tête illisible"))?;
+        serde_json::from_slice(&raw[12..12 + header_len]).map_err(|_| Error::Corrupt("unreadable header"))?;
     if header.version != FORMAT_VERSION {
         return Err(Error::UnsupportedVersion(header.version));
     }
     if header.slots.is_empty() {
-        return Err(Error::Corrupt("aucun slot de déverrouillage"));
+        return Err(Error::Corrupt("no unlock slot"));
     }
     // Un seul mot de passe maître, et un nombre raisonnable de slots : le
     // déverrouillage essaie chaque slot « mot de passe » (un Argon2 par slot).
     let password_slots = header.slots.iter().filter(|s| matches!(s.kind, SlotKind::Password { .. })).count();
     if password_slots != 1 || header.slots.len() > MAX_SLOTS {
-        return Err(Error::Corrupt("slots de déverrouillage invalides"));
+        return Err(Error::Corrupt("invalid unlock slots"));
     }
     Ok((&raw[..12 + header_len], header, &raw[12 + header_len..]))
 }
@@ -586,7 +586,7 @@ pub(crate) fn serialize_zeroizing<T: Serialize>(value: &T) -> Result<Zeroizing<V
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     let dir = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
     create_private_dir(dir)?;
-    let file_name = path.file_name().ok_or(Error::Corrupt("chemin de coffre invalide"))?;
+    let file_name = path.file_name().ok_or(Error::Corrupt("invalid vault path"))?;
     let tmp = dir.join(format!(".{}.tmp-{}", file_name.to_string_lossy(), Uuid::new_v4().simple()));
 
     let result = (|| {

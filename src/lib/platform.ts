@@ -1,12 +1,26 @@
+import { t } from "./i18n/index.svelte";
 // Plateforme, détectée dans la WebView (WKWebView sur macOS) : synchrone, donc
 // utilisable directement dans les gestionnaires de touches.
 export const IS_MAC = /Macintosh|Mac OS X/.test(navigator.userAgent);
 
 // Raccourcis de l'application : Cmd sur macOS, Ctrl+Maj ailleurs, pour que Ctrl+C,
 // Ctrl+L, etc. restent transmis au serveur.
+// Nom de la touche Maj traduit : accesseurs, relus à chaque affichage.
+const shift = () => t("keys.shift");
 export const KEYS = IS_MAC
   ? { copy: "⌘C", paste: "⌘V", lock: "⌘⇧L", lockShort: "⌘⇧L" }
-  : { copy: "Ctrl+Maj+C", paste: "Ctrl+Maj+V", lock: "Ctrl+Maj+L", lockShort: "Ctrl⇧L" };
+  : {
+      get copy() {
+        return `Ctrl+${shift()}+C`;
+      },
+      get paste() {
+        return `Ctrl+${shift()}+V`;
+      },
+      get lock() {
+        return `Ctrl+${shift()}+L`;
+      },
+      lockShort: "Ctrl⇧L",
+    };
 
 export type Shortcut = "copy" | "paste" | "lock";
 

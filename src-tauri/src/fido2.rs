@@ -25,6 +25,7 @@ use uuid::Uuid;
 use vault::{Fido2Binding, Secret, Vault};
 use zeroize::Zeroizing;
 
+use crate::i18n::tr;
 use crate::error::{CmdError, CmdResult};
 use crate::identity;
 use crate::state::AppState;
@@ -42,22 +43,23 @@ fn fido_err(message: impl Into<String>) -> CmdError {
 /// Traduit les erreurs CTAP2 (renvoyées sous forme de texte par la bibliothèque).
 fn ctap_err(e: impl std::fmt::Display) -> CmdError {
     let msg = e.to_string();
-    let known = [
-        ("CTAP2_ERR_PIN_INVALID", "fido2_pin", "Code PIN incorrect."),
-        ("CTAP2_ERR_PIN_AUTH_BLOCKED", "fido2", "Trop d'essais : débranchez puis rebranchez la clé."),
-        ("CTAP2_ERR_PIN_BLOCKED", "fido2", "Code PIN bloqué : la clé doit être réinitialisée."),
-        ("CTAP2_ERR_PIN_NOT_SET", "fido2", "Aucun code PIN n'est défini sur cette clé."),
-        ("CTAP2_ERR_PIN_POLICY_VIOLATION", "fido2_pin", "Code PIN refusé par la clé."),
-        ("TIMEOUT", "fido2", "Délai dépassé : la clé n'a pas été touchée."),
-        ("CTAP2_ERR_KEEPALIVE_CANCEL", "fido2", "Opération annulée."),
-        ("CTAP2_ERR_NO_CREDENTIALS", "fido2", "Cette clé n'est pas enregistrée pour ce coffre."),
-        ("CTAP2_ERR_CREDENTIAL_EXCLUDED", "fido2", "Cette clé est déjà enregistrée pour ce coffre."),
-        ("CTAP2_ERR_OPERATION_DENIED", "fido2", "Opération refusée par la clé."),
-        ("CTAP2_ERR_UNSUPPORTED_EXTENSION", "fido2", "Cette clé ne prend pas en charge l'extension hmac-secret."),
+    type Known = (&'static str, &'static str, fn() -> String);
+    let known: [Known; 11] = [
+        ("CTAP2_ERR_PIN_INVALID", "fido2_pin", || tr!("err.fido2.pinInvalid")),
+        ("CTAP2_ERR_PIN_AUTH_BLOCKED", "fido2", || tr!("err.fido2.authBlocked")),
+        ("CTAP2_ERR_PIN_BLOCKED", "fido2", || tr!("err.fido2.pinBlocked")),
+        ("CTAP2_ERR_PIN_NOT_SET", "fido2", || tr!("err.fido2.pinNotSet")),
+        ("CTAP2_ERR_PIN_POLICY_VIOLATION", "fido2_pin", || tr!("err.fido2.pinPolicy")),
+        ("TIMEOUT", "fido2", || tr!("err.fido2.timeout")),
+        ("CTAP2_ERR_KEEPALIVE_CANCEL", "fido2", || tr!("err.fido2.cancelled")),
+        ("CTAP2_ERR_NO_CREDENTIALS", "fido2", || tr!("err.fido2.notRegistered")),
+        ("CTAP2_ERR_CREDENTIAL_EXCLUDED", "fido2", || tr!("err.fido2.alreadyRegistered")),
+        ("CTAP2_ERR_OPERATION_DENIED", "fido2", || tr!("err.fido2.denied")),
+        ("CTAP2_ERR_UNSUPPORTED_EXTENSION", "fido2", || tr!("err.fido2.noHmac")),
     ];
     match known.iter().find(|(needle, _, _)| msg.contains(needle)) {
-        Some((_, code, text)) => CmdError::new(code, *text),
-        None => fido_err(format!("Erreur de la clé de sécurité : {msg}")),
+        Some((_, code, text)) => CmdError::new(code, text()),
+        None => fido_err(tr!("err.fido2.generic", detail = msg)),
     }
 }
 
@@ -67,9 +69,9 @@ fn ctap_err_with_retries(device: &FidoKeyHid, e: impl std::fmt::Display) -> CmdE
     if err.code == "fido2_pin" {
         if let Ok(left) = device.get_pin_retries() {
             err.message = match left {
-                0 => "Code PIN incorrect. La clé est bloquée.".into(),
-                1 => "Code PIN incorrect. Dernier essai avant blocage de la clé !".into(),
-                n => format!("Code PIN incorrect ({n} essais restants avant blocage)."),
+                0 => tr!("err.fido2.pinLocked"),
+                1 => tr!("err.fido2.pinLast"),
+                n => tr!("err.fido2.pinRetries", count = n),
             };
         }
     }
@@ -79,11 +81,9 @@ fn ctap_err_with_retries(device: &FidoKeyHid, e: impl std::fmt::Display) -> CmdE
 /// Ouvre l'unique clé branchée.
 fn open_device() -> CmdResult<FidoKeyHid> {
     match get_fidokey_devices().len() {
-        0 => Err(fido_err(
-            "Aucune clé de sécurité détectée. Branchez-la, puis réessayez.",
-        )),
+        0 => Err(fido_err(tr!("err.fido2.noKey"))),
         1 => FidoKeyHidFactory::create(&LibCfg::init()).map_err(ctap_err),
-        _ => Err(fido_err("Plusieurs clés de sécurité sont branchées : n'en laissez qu'une.")),
+        _ => Err(fido_err(tr!("err.fido2.multiple"))),
     }
 }
 
@@ -91,12 +91,10 @@ fn open_device() -> CmdResult<FidoKeyHid> {
 fn check_capabilities(device: &FidoKeyHid) -> CmdResult<()> {
     let info = device.get_info().map_err(ctap_err)?;
     if !info.extensions.iter().any(|e| e == "hmac-secret") {
-        return Err(fido_err("Cette clé ne prend pas en charge l'extension hmac-secret (FIDO2)."));
+        return Err(fido_err(tr!("err.fido2.noHmacFido2")));
     }
     if !info.options.iter().any(|(name, on)| name == "clientPin" && *on) {
-        return Err(fido_err(
-            "Définissez d'abord un code PIN sur la clé (outil du fabricant, par exemple « ykman fido access change-pin »).",
-        ));
+        return Err(fido_err(tr!("err.fido2.setPinFirst")));
     }
     Ok(())
 }
@@ -109,7 +107,7 @@ fn random<const N: usize>() -> [u8; N] {
 
 /// Demande à la clé le secret `hmac-secret` de `binding` (PIN + toucher).
 fn derive_secret(device: &FidoKeyHid, binding: &Fido2Binding, pin: &str) -> CmdResult<Zeroizing<[u8; 32]>> {
-    let salt: [u8; 32] = binding.salt.as_slice().try_into().map_err(|_| fido_err("Sel invalide."))?;
+    let salt: [u8; 32] = binding.salt.as_slice().try_into().map_err(|_| fido_err(tr!("err.fido2.badSalt")))?;
     let challenge = random::<32>();
     let args = GetAssertionArgsBuilder::new(&binding.rp_id, &challenge)
         .pin(pin)
@@ -117,10 +115,10 @@ fn derive_secret(device: &FidoKeyHid, binding: &Fido2Binding, pin: &str) -> CmdR
         .extensions(&[Gext::HmacSecret(Some(salt))])
         .build();
     let assertions = device.get_assertion_with_args(&args).map_err(|e| ctap_err_with_retries(device, e))?;
-    let assertion = assertions.first().ok_or_else(|| fido_err("Aucune réponse de la clé."))?;
+    let assertion = assertions.first().ok_or_else(|| fido_err(tr!("err.fido2.noResponse")))?;
     // Le secret dépend de la vérification de l'utilisateur : on l'exige.
     if !assertion.flags.user_verified_result {
-        return Err(fido_err("La clé n'a pas vérifié le code PIN."));
+        return Err(fido_err(tr!("err.fido2.noUv")));
     }
     assertion
         .extensions
@@ -129,7 +127,7 @@ fn derive_secret(device: &FidoKeyHid, binding: &Fido2Binding, pin: &str) -> CmdR
             Gext::HmacSecret(Some(out)) => Some(Zeroizing::new(*out)),
             _ => None,
         })
-        .ok_or_else(|| fido_err("La clé n'a pas renvoyé de secret hmac-secret."))
+        .ok_or_else(|| fido_err(tr!("err.fido2.noSecret")))
 }
 
 /// La clé branchée détient-elle cet identifiant ? Sans PIN ni toucher.
@@ -176,7 +174,7 @@ fn enroll(
     let _ = progress.send(EnrollProgress { touch: 1 });
     let attestation = device.make_credential_with_args(&args.build()).map_err(|e| ctap_err_with_retries(&device, e))?;
     if !attestation.extensions.iter().any(|e| matches!(e, Mext::HmacSecret(Some(true)))) {
-        return Err(fido_err("La clé n'a pas activé l'extension hmac-secret."));
+        return Err(fido_err(tr!("err.fido2.hmacNotEnabled")));
     }
 
     let binding = Fido2Binding {
@@ -226,7 +224,7 @@ fn worker() -> &'static mpsc::Sender<Job> {
 }
 
 async fn run_blocking<T: Send + 'static>(f: impl FnOnce() -> CmdResult<T> + Send + 'static) -> CmdResult<T> {
-    let interrupted = || CmdError::new("internal", "Tâche interrompue.");
+    let interrupted = || CmdError::new("internal", tr!("err.interrupted"));
     let (tx, rx) = oneshot::channel();
     worker()
         .send(Box::new(move || drop(tx.send(f()))))
@@ -245,10 +243,10 @@ pub async fn fido2_enroll(
 ) -> CmdResult<Fido2KeyView> {
     let label = label.trim().to_string();
     if label.is_empty() || label.chars().count() > MAX_LABEL || label.chars().any(char::is_control) {
-        return Err(CmdError::invalid(format!("Nom de clé requis ({MAX_LABEL} caractères au plus).")));
+        return Err(CmdError::invalid(tr!("err.fido2.labelRequired", max = MAX_LABEL)));
     }
     if pin.is_empty() {
-        return Err(CmdError::new("fido2_pin", "Saisissez le code PIN de la clé."));
+        return Err(CmdError::new("fido2_pin", tr!("err.fido2.enterPin")));
     }
 
     crate::commands::confirm_master_password(&app, password).await?;
@@ -315,17 +313,17 @@ pub async fn fido2_set_pin(state: State<'_, AppState>, pin: Secret) -> CmdResult
     state.with_vault(|_| Ok(()))?;
     let chars = pin.expose().chars().count();
     if chars < MIN_PIN || pin.expose().len() > MAX_PIN_BYTES {
-        return Err(CmdError::new("fido2_pin", format!("Le code PIN doit compter de {MIN_PIN} à 63 caractères.")));
+        return Err(CmdError::new("fido2_pin", tr!("err.fido2.pinLength", min = MIN_PIN)));
     }
     run_blocking(move || {
         let device = open_device()?;
         let info = device.get_info().map_err(ctap_err)?;
         if info.options.iter().any(|(name, on)| name == "clientPin" && *on) {
-            return Err(fido_err("Cette clé a déjà un code PIN."));
+            return Err(fido_err(tr!("err.fido2.hasPin")));
         }
         let min = (info.min_pin_length as usize).max(MIN_PIN);
         if chars < min {
-            return Err(CmdError::new("fido2_pin", format!("Cette clé exige un code PIN d'au moins {min} caractères.")));
+            return Err(CmdError::new("fido2_pin", tr!("err.fido2.pinMin", min = min)));
         }
         device.set_new_pin(pin.expose()).map_err(ctap_err)
     })
@@ -348,13 +346,13 @@ pub async fn fido2_unlock(app: AppHandle, pin: Secret) -> CmdResult<()> {
     let state = app.state::<AppState>();
     let _guard = state.begin_unlock()?;
     if pin.is_empty() {
-        return Err(CmdError::new("fido2_pin", "Saisissez le code PIN de la clé."));
+        return Err(CmdError::new("fido2_pin", tr!("err.fido2.enterPin")));
     }
     let path = state.vault_path.clone();
     let vault = run_blocking(move || {
         let bindings = Vault::fido2_bindings(&path)?;
         if bindings.is_empty() {
-            return Err(fido_err("Aucune clé de sécurité n'est enregistrée pour ce coffre."));
+            return Err(fido_err(tr!("err.fido2.noneRegistered")));
         }
         let device = open_device()?;
         // Les champs lus ici ne sont pas encore authentifiés : s'ils ont été modifiés,
@@ -362,11 +360,11 @@ pub async fn fido2_unlock(app: AppHandle, pin: Secret) -> CmdResult<()> {
         let (id, binding) = bindings
             .iter()
             .find(|(_, b)| holds_credential(&device, b))
-            .ok_or_else(|| fido_err("Cette clé n'est pas enregistrée pour ce coffre."))?;
+            .ok_or_else(|| fido_err(tr!("err.fido2.notRegistered")))?;
         let secret = derive_secret(&device, binding, pin.expose())?;
         Vault::unlock_with_fido2(path, *id, &secret).map_err(|e| match e {
             vault::Error::InvalidCredentials => {
-                fido_err("La clé ne correspond pas au coffre. Utilisez le mot de passe maître.")
+                fido_err(tr!("err.fido2.mismatch"))
             }
             other => other.into(),
         })
@@ -383,11 +381,11 @@ mod tests {
     #[test]
     fn ctap_errors_are_translated() {
         let e = ctap_err("0x31 CTAP2_ERR_PIN_INVALID   PIN Invalid.");
-        assert_eq!((e.code, e.message.as_str()), ("fido2_pin", "Code PIN incorrect."));
+        assert_eq!((e.code, e.message), ("fido2_pin", tr!("err.fido2.pinInvalid")));
         let e = ctap_err("0x34 CTAP2_ERR_PIN_AUTH_BLOCKED PIN authentication, pinAuth, blocked.");
-        assert!(e.message.contains("rebranchez"));
+        assert_eq!(e.message, tr!("err.fido2.authBlocked"));
         let e = ctap_err("0x32 CTAP2_ERR_PIN_BLOCKED PIN Blocked.");
-        assert!(e.message.contains("bloqué"));
+        assert_eq!(e.message, tr!("err.fido2.pinBlocked"));
         let e = ctap_err("something odd");
         assert_eq!(e.code, "fido2");
         assert!(e.message.contains("something odd"));

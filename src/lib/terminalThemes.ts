@@ -2,7 +2,7 @@ import type { ITheme } from "@xterm/xterm";
 
 export const TERMINAL_THEMES: Record<string, { name: string; theme: ITheme }> = {
   night: {
-    name: "Nuit",
+    name: "theme.night",
     theme: {
       background: "#0d0f14",
       foreground: "#dfe3ee",
@@ -28,7 +28,7 @@ export const TERMINAL_THEMES: Record<string, { name: string; theme: ITheme }> = 
     },
   },
   day: {
-    name: "Jour",
+    name: "theme.day",
     theme: {
       background: "#fbfbfd",
       foreground: "#1f2330",

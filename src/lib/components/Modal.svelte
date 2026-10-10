@@ -4,6 +4,7 @@
 </script>
 
 <script lang="ts">
+  import { t } from "../i18n/index.svelte";
   import { onMount, type Snippet } from "svelte";
   import Icon from "./Icon.svelte";
 
@@ -74,7 +75,7 @@
   >
     <header>
       <h2>{title}</h2>
-      <button class="btn ghost icon" onclick={onclose} aria-label="Fermer"><Icon name="x" /></button>
+      <button class="btn ghost icon" onclick={onclose} aria-label={t("common.close")}><Icon name="x" /></button>
     </header>
     <div class="body">{@render children()}</div>
     {#if footer}<footer>{@render footer()}</footer>{/if}

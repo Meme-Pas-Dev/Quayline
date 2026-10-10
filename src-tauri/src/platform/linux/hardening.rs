@@ -8,10 +8,10 @@ pub fn harden_process() {
     unsafe {
         let zero = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
         if libc::setrlimit(libc::RLIMIT_CORE, &zero) != 0 {
-            eprintln!("{}: impossible de désactiver les core dumps", crate::identity::SLUG);
+            eprintln!("{}: cannot disable core dumps", crate::identity::SLUG);
         }
         if libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) != 0 {
-            eprintln!("{}: impossible de désactiver PR_SET_DUMPABLE", crate::identity::SLUG);
+            eprintln!("{}: cannot clear PR_SET_DUMPABLE", crate::identity::SLUG);
         }
     }
 }

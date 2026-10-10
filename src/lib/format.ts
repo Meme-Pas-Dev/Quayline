@@ -1,20 +1,21 @@
-const UNITS = ["o", "Ko", "Mo", "Go", "To"];
+import { formatNumber, intlLocale, t } from "./i18n/index.svelte";
+const UNITS = ["units.bytes", "units.kb", "units.mb", "units.gb", "units.tb"] as const;
 
+/** Taille lisible, dans la langue de l'interface (« 1,5 Mo », « 1.5 MB »). */
 export function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024) return `${formatNumber(bytes)} ${t(UNITS[0])}`;
   let v = bytes;
   let i = 0;
   while (v >= 1024 && i < UNITS.length - 1) {
     v /= 1024;
     i++;
   }
-  return `${v.toLocaleString("fr-FR", { maximumFractionDigits: v < 10 ? 1 : 0 })} ${UNITS[i]}`;
+  return `${formatNumber(v, { maximumFractionDigits: v < 10 ? 1 : 0 })} ${t(UNITS[i])}`;
 }
 
-const dateFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" });
-
 export function formatDate(secs: number | null): string {
-  return secs ? dateFmt.format(new Date(secs * 1000)) : "";
+  if (!secs) return "";
+  return new Intl.DateTimeFormat(intlLocale(), { dateStyle: "short", timeStyle: "short" }).format(new Date(secs * 1000));
 }
 
 /**

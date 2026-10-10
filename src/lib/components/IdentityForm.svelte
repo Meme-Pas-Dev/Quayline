@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.svelte";
   import { api, type Identity, type SecretField } from "../api";
   import { handleError, reload } from "../store.svelte";
   import Modal from "./Modal.svelte";
@@ -30,7 +31,7 @@
     const file = (e.currentTarget as HTMLInputElement).files?.[0];
     if (!file) return;
     if (file.size > 64 * 1024) {
-      toast("Fichier trop volumineux pour une clé privée.", "error");
+      toast(t("identityForm.fileTooLarge"), "error");
       return;
     }
     privateKey = await file.text();
@@ -51,7 +52,7 @@
       });
       password = privateKey = passphrase = "";
       await reload();
-      toast(existing ? "Identité mise à jour" : "Identité ajoutée", "success");
+      toast(t(existing ? "identityForm.updated" : "identityForm.added"), "success");
       onclose();
     } catch (err) {
       handleError(err);
@@ -61,37 +62,37 @@
   }
 </script>
 
-<Modal title={existing ? "Modifier l'identité" : "Nouvelle identité"} {onclose} width={560}>
+<Modal title={t(existing ? "identityForm.titleEdit" : "identityForm.titleNew")} {onclose} width={560}>
   <form id="identity-form" class="stack" onsubmit={save}>
     <div class="row">
       <label class="field">
-        <span>Nom</span>
+        <span>{t("keychain.name")}</span>
         <!-- svelte-ignore a11y_autofocus -->
-        <input class="input" bind:value={label} placeholder="Compte admin" required autofocus />
+        <input class="input" bind:value={label} placeholder={t("identityForm.namePlaceholder")} required autofocus />
       </label>
       <label class="field">
-        <span>Utilisateur</span>
+        <span>{t("keychain.user")}</span>
         <input class="input" bind:value={username} placeholder="root" spellcheck="false" />
       </label>
     </div>
 
     <div class="section">
       <div class="section-head">
-        <h3>Mot de passe</h3>
+        <h3>{t("identityForm.password")}</h3>
         {#if existing?.hasPassword}
-          <label class="clear"><input type="checkbox" bind:checked={clearPassword} /> Supprimer</label>
+          <label class="clear"><input type="checkbox" bind:checked={clearPassword} /> {t("common.delete")}</label>
         {/if}
       </div>
       {#if !clearPassword}
-        <PasswordInput bind:value={password} placeholder={existing?.hasPassword ? "•••••••• (inchangé)" : "Facultatif"} />
+        <PasswordInput bind:value={password} placeholder={existing?.hasPassword ? t("identityForm.unchangedPassword") : t("common.optional")} />
       {/if}
     </div>
 
     <div class="section">
       <div class="section-head">
-        <h3>Clé privée</h3>
+        <h3>{t("identityForm.privateKey")}</h3>
         {#if existing?.hasPrivateKey}
-          <label class="clear"><input type="checkbox" bind:checked={clearKey} /> Supprimer</label>
+          <label class="clear"><input type="checkbox" bind:checked={clearKey} /> {t("common.delete")}</label>
         {/if}
       </div>
       {#if !clearKey}
@@ -104,28 +105,28 @@
           rows="5"
           spellcheck="false"
           placeholder={existing?.hasPrivateKey
-            ? "Collez une nouvelle clé pour remplacer l'actuelle"
+            ? t("identityForm.replaceKey")
             : "-----BEGIN OPENSSH PRIVATE KEY-----"}
         ></textarea>
         <div class="row">
           <label class="btn file">
-            Importer un fichier…
+            {t("identityForm.importFile")}
             <input type="file" onchange={loadKeyFile} hidden />
           </label>
           <div></div>
         </div>
         <label class="field">
-          <span>Phrase de passe de la clé</span>
-          <PasswordInput bind:value={passphrase} placeholder={existing?.hasPassphrase ? "•••••••• (inchangée)" : "Si la clé est chiffrée"} />
-          <small>Facultatif : si elle est absente, elle sera demandée à chaque connexion.</small>
+          <span>{t("identityForm.passphrase")}</span>
+          <PasswordInput bind:value={passphrase} placeholder={existing?.hasPassphrase ? t("identityForm.unchangedPassphrase") : t("identityForm.passphrasePlaceholder")} />
+          <small>{t("identityForm.passphraseHint")}</small>
         </label>
       {/if}
     </div>
   </form>
 
   {#snippet footer()}
-    <button class="btn" onclick={onclose}>Annuler</button>
-    <button class="btn primary" type="submit" form="identity-form" disabled={busy || !label}>Enregistrer</button>
+    <button class="btn" onclick={onclose}>{t("common.cancel")}</button>
+    <button class="btn primary" type="submit" form="identity-form" disabled={busy || !label}>{t("common.save")}</button>
   {/snippet}
 </Modal>
 

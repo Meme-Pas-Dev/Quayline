@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { intlLocale, t, tn } from "../i18n/index.svelte";
   import {
     api,
     errorMessage,
@@ -43,7 +44,7 @@
       const file = await api.vaultExport(master, passphrase, { ...selection });
       if (file) {
         exporting = false;
-        toast(`Export enregistré : ${file}`, "success", 6000);
+        toast(t("backup.exported", { file }), "success", 6000);
       }
     } catch (err) {
       exportError = errorMessage(err);
@@ -112,11 +113,11 @@
       preview = null;
       await reload();
       onimported();
-      const parts = [`${r.added} ajouté${r.added > 1 ? "s" : ""}`];
-      if (r.replaced) parts.push(`${r.replaced} remplacé${r.replaced > 1 ? "s" : ""}`);
-      if (r.skipped) parts.push(`${r.skipped} ignoré${r.skipped > 1 ? "s" : ""}`);
-      if (r.settings) parts.push("réglages appliqués");
-      toast(`Import terminé : ${parts.join(", ")}`, "success", 6000);
+      const parts = [tn("backup.added", r.added)];
+      if (r.replaced) parts.push(tn("backup.replaced", r.replaced));
+      if (r.skipped) parts.push(tn("backup.skipped", r.skipped));
+      if (r.settings) parts.push(t("backup.settingsApplied"));
+      toast(t("backup.importDone", { details: parts.join(", ") }), "success", 6000);
     } catch (err) {
       importError = errorMessage(err);
     } finally {
@@ -125,138 +126,132 @@
   }
 
   function exportedOn(secs: number): string {
-    return new Date(secs * 1000).toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" });
-  }
-
-  function plural(n: number, word: string): string {
-    return `${n} ${word}${n > 1 ? "s" : ""}`;
+    return new Date(secs * 1000).toLocaleString(intlLocale(), { dateStyle: "long", timeStyle: "short" });
   }
 </script>
 
 <section class="card">
-  <h2><Icon name="download" size={17} /> Sauvegarde et transfert</h2>
-  <p class="hint">
-    Exportez hôtes, trousseau, clés d'hôte et réglages dans un fichier chiffré par une phrase de passe, pour une
-    sauvegarde ou un autre ordinateur. Les clés FIDO2 et le fournisseur d'identité ne sont pas exportés : ils se réactivent sur
-    chaque installation.
-  </p>
+  <h2><Icon name="download" size={17} /> {t("backup.title")}</h2>
+  <p class="hint">{t("backup.hint")}</p>
   <div class="actions">
-    <button class="btn" onclick={pickImport}><Icon name="upload" size={16} /> Importer…</button>
-    <button class="btn primary" onclick={openExport}><Icon name="download" size={16} /> Exporter…</button>
+    <button class="btn" onclick={pickImport}><Icon name="upload" size={16} /> {t("backup.import")}</button>
+    <button class="btn primary" onclick={openExport}><Icon name="download" size={16} /> {t("backup.export")}</button>
   </div>
 </section>
 
 {#if exporting}
-  <Modal title="Exporter les données" onclose={() => !exportBusy && (exporting = false)} width={480}>
+  <Modal title={t("backup.exportTitle")} onclose={() => !exportBusy && (exporting = false)} width={480}>
     <form id="export-form" class="form" onsubmit={runExport}>
       <fieldset>
-        <legend>Contenu</legend>
-        <label class="check"><input type="checkbox" bind:checked={selection.hosts} /> Hôtes ({data.hosts.length})</label>
+        <legend>{t("backup.content")}</legend>
+        <label class="check"
+          ><input type="checkbox" bind:checked={selection.hosts} /> {t("backup.hosts", { count: data.hosts.length })}</label
+        >
         <label class="check">
-          <input type="checkbox" bind:checked={selection.identities} /> Trousseau ({data.identities.length}), avec ses
-          mots de passe et clés privées
+          <input type="checkbox" bind:checked={selection.identities} />
+          {t("backup.identities", { count: data.identities.length })}
         </label>
         <label class="check">
-          <input type="checkbox" bind:checked={selection.knownHosts} /> Clés d'hôte approuvées ({knownHostsCount})
+          <input type="checkbox" bind:checked={selection.knownHosts} /> {t("backup.knownHosts", { count: knownHostsCount })}
         </label>
-        <label class="check"><input type="checkbox" bind:checked={selection.settings} /> Réglages</label>
+        <label class="check"><input type="checkbox" bind:checked={selection.settings} /> {t("backup.settings")}</label>
         {#if selection.hosts && !selection.identities}
-          <small class="note">Les hôtes seront exportés sans leur identité.</small>
+          <small class="note">{t("backup.hostsWithoutIdentity")}</small>
         {/if}
       </fieldset>
       <label class="field">
-        <span>Phrase de passe de l'export</span>
-        <PasswordInput bind:value={passphrase} placeholder="12 caractères minimum" autofocus />
+        <span>{t("backup.passphrase")}</span>
+        <PasswordInput bind:value={passphrase} placeholder={t("lock.minLength", { count: 12 })} autofocus />
       </label>
       <StrengthMeter password={passphrase} />
       <label class="field">
-        <span>Confirmation</span>
+        <span>{t("lock.confirmation")}</span>
         <PasswordInput bind:value={passphraseConfirm} />
         {#if passphraseConfirm && passphraseConfirm !== passphrase}
-          <small class="error-text">Les phrases de passe ne correspondent pas.</small>
+          <small class="error-text">{t("backup.passphraseMismatch")}</small>
         {/if}
       </label>
       <p class="note">
-        Elle sera demandée à l'import ; sans elle, le fichier est illisible. Choisissez-la différente du mot de passe
-        maître.
+        {t("backup.passphraseNote")}
       </p>
       <label class="field">
-        <span>Mot de passe maître</span>
+        <span>{t("lock.masterPassword")}</span>
         <PasswordInput bind:value={master} />
       </label>
       {#if exportError}<p class="error-text">{exportError}</p>{/if}
     </form>
     {#snippet footer()}
-      <button class="btn" onclick={() => (exporting = false)} disabled={exportBusy}>Annuler</button>
+      <button class="btn" onclick={() => (exporting = false)} disabled={exportBusy}>{t("common.cancel")}</button>
       <button class="btn primary" type="submit" form="export-form" disabled={!exportValid || exportBusy}>
-        {exportBusy ? "Chiffrement…" : "Choisir l'emplacement…"}
+        {t(exportBusy ? "backup.encrypting" : "backup.chooseLocation")}
       </button>
     {/snippet}
   </Modal>
 {/if}
 
 {#if importFile}
-  <Modal title="Importer des données" onclose={() => !importBusy && closeImport()} width={480}>
+  <Modal title={t("backup.importTitle")} onclose={() => !importBusy && closeImport()} width={480}>
     <p class="file"><Icon name="file" size={15} /> {importFile}</p>
     {#if !preview}
       <form id="import-form" class="form" onsubmit={decrypt}>
         <label class="field">
-          <span>Phrase de passe de l'export</span>
+          <span>{t("backup.passphrase")}</span>
           <PasswordInput bind:value={importPassphrase} autofocus />
         </label>
       </form>
     {:else}
       <p class="note">
-        Exporté le {exportedOn(preview.createdAt)}{preview.appVersion ? ` (version ${preview.appVersion})` : ""}.
+        {t("backup.exportedOn", { date: exportedOn(preview.createdAt) })}{preview.appVersion
+          ? t("backup.version", { version: preview.appVersion })
+          : ""}.
       </p>
       <table>
-        <thead><tr><th></th><th>Nouveaux</th><th>Déjà présents</th></tr></thead>
+        <thead><tr><th></th><th>{t("backup.new")}</th><th>{t("backup.existing")}</th></tr></thead>
         <tbody>
-          <tr><td>Hôtes</td><td>{preview.hosts.new}</td><td>{preview.hosts.duplicates}</td></tr>
-          <tr><td>Trousseau</td><td>{preview.identities.new}</td><td>{preview.identities.duplicates}</td></tr>
+          <tr><td>{t("backup.rowHosts")}</td><td>{preview.hosts.new}</td><td>{preview.hosts.duplicates}</td></tr>
+          <tr><td>{t("backup.rowKeychain")}</td><td>{preview.identities.new}</td><td>{preview.identities.duplicates}</td></tr>
           <tr>
-            <td>Clés d'hôte</td>
+            <td>{t("backup.rowKnownHosts")}</td>
             <td>{preview.knownHosts.new}</td>
             <td>
               {preview.knownHosts.duplicates}
-              {#if preview.knownHostsIdentical}<span class="faint">(+ {preview.knownHostsIdentical} identiques)</span>{/if}
+              {#if preview.knownHostsIdentical}<span class="faint">{t("backup.identical", { count: preview.knownHostsIdentical })}</span>{/if}
             </td>
           </tr>
         </tbody>
       </table>
       {#if hasDuplicates}
         <fieldset>
-          <legend>Éléments déjà présents</legend>
-          <label class="check"><input type="radio" bind:group={duplicates} value="skip" /> Garder les miens</label>
+          <legend>{t("backup.duplicates")}</legend>
+          <label class="check"><input type="radio" bind:group={duplicates} value="skip" /> {t("backup.keepMine")}</label>
           <label class="check">
-            <input type="radio" bind:group={duplicates} value="replace" /> Remplacer par ceux du fichier
+            <input type="radio" bind:group={duplicates} value="replace" /> {t("backup.replaceWithFile")}
           </label>
           <label class="check">
-            <input type="radio" bind:group={duplicates} value="keepBoth" /> Garder les deux (suffixe « importé »)
+            <input type="radio" bind:group={duplicates} value="keepBoth" /> {t("backup.keepBoth")}
           </label>
           {#if preview.knownHosts.duplicates}
             <small class="note">
-              {plural(preview.knownHosts.duplicates, "serveur")} a une clé différente dans le fichier : elle n'est
-              remplacée qu'avec « Remplacer ». Vérifiez que le serveur a bien changé de clé.
+              {tn("backup.keyConflict", preview.knownHosts.duplicates)}
             </small>
           {/if}
         </fieldset>
       {/if}
       {#if preview.settings}
         <label class="check">
-          <input type="checkbox" bind:checked={importSettings} /> Appliquer aussi les réglages du fichier
+          <input type="checkbox" bind:checked={importSettings} /> {t("backup.applySettings")}
         </label>
       {/if}
     {/if}
     {#if importError}<p class="error-text">{importError}</p>{/if}
     {#snippet footer()}
-      <button class="btn" onclick={closeImport} disabled={importBusy}>Annuler</button>
+      <button class="btn" onclick={closeImport} disabled={importBusy}>{t("common.cancel")}</button>
       {#if !preview}
         <button class="btn primary" type="submit" form="import-form" disabled={!importPassphrase || importBusy}>
-          {importBusy ? "Déchiffrement…" : "Déchiffrer"}
+          {t(importBusy ? "backup.decrypting" : "backup.decrypt")}
         </button>
       {:else}
-        <button class="btn primary" onclick={apply} disabled={importBusy}>Importer</button>
+        <button class="btn primary" onclick={apply} disabled={importBusy}>{t("backup.importAction")}</button>
       {/if}
     {/snippet}
   </Modal>

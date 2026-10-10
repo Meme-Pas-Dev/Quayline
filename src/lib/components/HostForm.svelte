@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "../i18n/index.svelte";
   import { api, type Host, type HostInput, type HostKind } from "../api";
   import Icon from "./Icon.svelte";
   import { data, handleError, reload } from "../store.svelte";
@@ -14,7 +15,7 @@
   // svelte-ignore state_referenced_locally
   let form = $state({
     kind: (host?.kind ?? "ssh") as HostKind,
-    label: host ? (copy ? `${host.label} (copie)` : host.label) : "",
+    label: host ? (copy ? t("hostForm.copySuffix", { name: host.label }) : host.label) : "",
     hostname: host?.hostname ?? "",
     port: host?.port ?? 22,
     username: host?.username ?? "",
@@ -47,7 +48,7 @@
     try {
       await api.hostSave(input);
       await reload();
-      toast(host && !copy ? "Hôte mis à jour" : "Hôte ajouté", "success");
+      toast(t(host && !copy ? "hostForm.updated" : "hostForm.added"), "success");
       onclose();
     } catch (err) {
       handleError(err);
@@ -57,11 +58,11 @@
   }
 </script>
 
-<Modal title={copy ? "Dupliquer l'hôte" : host ? "Modifier l'hôte" : "Nouvel hôte"} {onclose} width={560}>
+<Modal title={t(copy ? "hostForm.titleDuplicate" : host ? "hostForm.titleEdit" : "hostForm.titleNew")} {onclose} width={560}>
   <form id="host-form" class="grid" onsubmit={save}>
     <div class="field span3">
-      <span>Type de connexion</span>
-      <div class="kinds" role="radiogroup" aria-label="Type de connexion">
+      <span>{t("hostForm.kind")}</span>
+      <div class="kinds" role="radiogroup" aria-label={t("hostForm.kind")}>
         <button
           type="button"
           role="radio"
@@ -71,7 +72,7 @@
           onclick={() => (form.kind = "ssh")}
         >
           <Icon name="terminal" size={18} />
-          <span><strong>SSH</strong><small>Terminal</small></span>
+          <span><strong>SSH</strong><small>{t("hostForm.kindSsh")}</small></span>
         </button>
         <button
           type="button"
@@ -82,53 +83,53 @@
           onclick={() => (form.kind = "sftp")}
         >
           <Icon name="folder" size={18} />
-          <span><strong>SFTP</strong><small>Explorateur de fichiers</small></span>
+          <span><strong>SFTP</strong><small>{t("hostForm.kindSftp")}</small></span>
         </button>
       </div>
-      <small>Ce qu'ouvre un clic sur la tuile. L'autre reste accessible depuis la tuile.</small>
+      <small>{t("hostForm.kindHint")}</small>
     </div>
 
     <label class="field span2">
-      <span>Adresse</span>
+      <span>{t("hostForm.address")}</span>
       <!-- svelte-ignore a11y_autofocus -->
-      <input class="input" bind:value={form.hostname} placeholder="serveur.exemple.fr ou 192.168.1.10" required autofocus spellcheck="false" />
+      <input class="input" bind:value={form.hostname} placeholder={t("hostForm.addressPlaceholder")} required autofocus spellcheck="false" />
     </label>
     <label class="field">
-      <span>Port</span>
+      <span>{t("hostForm.port")}</span>
       <input class="input" type="number" min="1" max="65535" bind:value={form.port} required />
     </label>
 
     <label class="field span2">
-      <span>Nom</span>
-      <input class="input" bind:value={form.label} placeholder={form.hostname || "Mon serveur"} />
+      <span>{t("hostForm.name")}</span>
+      <input class="input" bind:value={form.label} placeholder={form.hostname || t("hostForm.namePlaceholder")} />
     </label>
     <label class="field">
-      <span>Groupe</span>
-      <input class="input" bind:value={form.group} list="host-groups" placeholder="Aucun" />
+      <span>{t("hostForm.group")}</span>
+      <input class="input" bind:value={form.group} list="host-groups" placeholder={t("hostForm.groupPlaceholder")} />
       <datalist id="host-groups">
         {#each groups as g}<option value={g}></option>{/each}
       </datalist>
     </label>
 
     <label class="field">
-      <span>Utilisateur</span>
-      <input class="input" bind:value={form.username} placeholder="Celui de l'identité" spellcheck="false" />
+      <span>{t("hostForm.user")}</span>
+      <input class="input" bind:value={form.username} placeholder={t("hostForm.userPlaceholder")} spellcheck="false" />
     </label>
     <label class="field span2">
-      <span>Identité du trousseau</span>
+      <span>{t("hostForm.identity")}</span>
       <select class="input" bind:value={form.identityId}>
-        <option value="">Aucune (demandée à la connexion)</option>
+        <option value="">{t("hostForm.identityNone")}</option>
         {#each data.identities as i}<option value={i.id}>{i.label}</option>{/each}
       </select>
     </label>
 
     <label class="field span3">
-      <span>Étiquettes</span>
+      <span>{t("hostForm.tags")}</span>
       <input class="input" bind:value={form.tags} placeholder="prod, web, debian" />
     </label>
 
     <div class="field span3">
-      <span>Couleur</span>
+      <span>{t("hostForm.color")}</span>
       <div class="colors">
         {#each COLORS as c}
           <button
@@ -137,21 +138,21 @@
             class:selected={form.color === c}
             style:background={c}
             onclick={() => (form.color = c)}
-            aria-label="Couleur {c}"
+            aria-label={t("hostForm.colorOption", { color: c })}
           ></button>
         {/each}
       </div>
     </div>
 
     <label class="field span3">
-      <span>Notes</span>
+      <span>{t("hostForm.notes")}</span>
       <textarea class="input" bind:value={form.notes} rows="3"></textarea>
     </label>
   </form>
 
   {#snippet footer()}
-    <button class="btn" onclick={onclose}>Annuler</button>
-    <button class="btn primary" type="submit" form="host-form" disabled={busy || !form.hostname}>Enregistrer</button>
+    <button class="btn" onclick={onclose}>{t("common.cancel")}</button>
+    <button class="btn primary" type="submit" form="host-form" disabled={busy || !form.hostname}>{t("common.save")}</button>
   {/snippet}
 </Modal>
 

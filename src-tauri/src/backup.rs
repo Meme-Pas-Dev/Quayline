@@ -13,6 +13,7 @@ use tauri_plugin_dialog::DialogExt;
 use vault::export::{self, Duplicates, ExportData, ExportSelection, ImportPreview, ImportReport, MAX_EXPORT_LEN};
 use vault::{KdfParams, Secret};
 
+use crate::i18n::tr;
 use crate::commands::{confirm_master_password, validate_import, MAX_LABEL};
 use crate::error::{CmdError, CmdResult};
 use crate::state::{AppState, PendingImport};
@@ -22,7 +23,7 @@ const EXTENSION: &str = "qlexport";
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> CmdResult<T> + Send + 'static) -> CmdResult<T> {
     tauri::async_runtime::spawn_blocking(f)
         .await
-        .map_err(|_| CmdError::new("internal", "Tâche interrompue."))?
+        .map_err(|_| CmdError::new("internal", tr!("err.interrupted")))?
 }
 
 fn now() -> u64 {
@@ -73,10 +74,7 @@ pub async fn vault_export(
     selection: ExportSelection,
 ) -> CmdResult<Option<String>> {
     vault::check_password_policy(passphrase.expose().as_bytes()).map_err(|_| {
-        CmdError::invalid(format!(
-            "La phrase de passe de l'export doit contenir au moins {} caractères.",
-            vault::MIN_PASSWORD_LEN
-        ))
+        CmdError::invalid(tr!("err.export.passphrase", count = vault::MIN_PASSWORD_LEN))
     })?;
     confirm_master_password(&app, password).await?;
 
@@ -86,7 +84,7 @@ pub async fn vault_export(
         .state::<AppState>()
         .with_vault(|v| Ok(ExportData::from_vault(&v.data, selection, created_at, &version)))?;
     if data.is_empty() {
-        return Err(CmdError::invalid("Rien à exporter."));
+        return Err(CmdError::invalid(tr!("err.export.nothing")));
     }
 
     let dialog_app = app.clone();
@@ -94,9 +92,9 @@ pub async fn vault_export(
         let mut dialog = dialog_app
             .dialog()
             .file()
-            .set_title("Exporter les données de Quayline")
+            .set_title(tr!("backup.dialogExport"))
             .set_file_name(format!("quayline-{}.{EXTENSION}", date(created_at)))
-            .add_filter("Export Quayline", &[EXTENSION]);
+            .add_filter(tr!("backup.filter"), &[EXTENSION]);
         if let Some(window) = dialog_app.get_webview_window("main") {
             dialog = dialog.set_parent(&window);
         }
@@ -112,7 +110,7 @@ pub async fn vault_export(
     blocking(move || {
         let bytes = export::seal(&data, passphrase.expose().as_bytes(), KdfParams::DEFAULT)?;
         write_private(&path, &bytes)
-            .map_err(|e| CmdError::new("io", format!("Écriture impossible : {e}")))?;
+            .map_err(|e| CmdError::new("io", tr!("err.write", detail = e)))?;
         Ok(Some(file_name(&path)))
     })
     .await
@@ -130,8 +128,8 @@ pub async fn vault_import_pick(app: AppHandle) -> CmdResult<Option<String>> {
         let mut dialog = dialog_app
             .dialog()
             .file()
-            .set_title("Importer des données dans Quayline")
-            .add_filter("Export Quayline", &[EXTENSION]);
+            .set_title(tr!("backup.dialogImport"))
+            .add_filter(tr!("backup.filter"), &[EXTENSION]);
         if let Some(window) = dialog_app.get_webview_window("main") {
             dialog = dialog.set_parent(&window);
         }
@@ -143,11 +141,11 @@ pub async fn vault_import_pick(app: AppHandle) -> CmdResult<Option<String>> {
     };
 
     let raw = blocking(move || {
-        let len = std::fs::metadata(&path).map_err(|e| CmdError::new("io", format!("Lecture impossible : {e}")))?.len();
+        let len = std::fs::metadata(&path).map_err(|e| CmdError::new("io", tr!("err.read", detail = e)))?.len();
         if len > MAX_EXPORT_LEN as u64 {
-            return Err(CmdError::invalid("Fichier trop volumineux pour être un export Quayline."));
+            return Err(CmdError::invalid(tr!("err.import.tooLarge")));
         }
-        let raw = std::fs::read(&path).map_err(|e| CmdError::new("io", format!("Lecture impossible : {e}")))?;
+        let raw = std::fs::read(&path).map_err(|e| CmdError::new("io", tr!("err.read", detail = e)))?;
         Ok((raw, file_name(&path)))
     })
     .await?;
@@ -162,7 +160,7 @@ pub async fn vault_import_preview(app: AppHandle, passphrase: Secret) -> CmdResu
     let state = app.state::<AppState>();
     let raw = match state.take_pending_import()? {
         PendingImport::File(raw) => raw,
-        PendingImport::Opened(_) => return Err(CmdError::new("no_import", "Choisissez d'abord un fichier.")),
+        PendingImport::Opened(_) => return Err(CmdError::new("no_import", tr!("err.import.chooseFile"))),
     };
     let opened = {
         let raw = raw.clone();
@@ -174,7 +172,7 @@ pub async fn vault_import_preview(app: AppHandle, passphrase: Secret) -> CmdResu
             state.set_pending_import(Some(PendingImport::File(raw)))?;
             return Err(match e.code {
                 "bad_password" => {
-                    CmdError::new("bad_password", "Phrase de passe incorrecte, ou fichier modifié depuis l'export.")
+                    CmdError::new("bad_password", tr!("err.import.badPassphrase"))
                 }
                 _ => e,
             });
@@ -196,9 +194,10 @@ pub fn vault_import_apply(
     let state = app.state::<AppState>();
     let data = match state.take_pending_import()? {
         PendingImport::Opened(data) => data,
-        PendingImport::File(_) => return Err(CmdError::new("no_import", "Fichier pas encore déchiffré.")),
+        PendingImport::File(_) => return Err(CmdError::new("no_import", tr!("err.import.notDecrypted"))),
     };
-    state.mutate_vault(|v| Ok(export::merge(&mut v.data, data, duplicates, import_settings, MAX_LABEL)))
+    let suffix = tr!("backup.importedSuffix");
+    state.mutate_vault(|v| Ok(export::merge(&mut v.data, data, duplicates, import_settings, MAX_LABEL, &suffix)))
 }
 
 #[tauri::command]

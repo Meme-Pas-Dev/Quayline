@@ -229,6 +229,7 @@ export interface KnownHost {
 
 export const api = {
   appInfo: () => invoke<AppInfo>("app_info"),
+  setLanguage: (language: string) => invoke<void>("set_language", { language }),
   vaultStatus: () => invoke<VaultStatus>("vault_status"),
   vaultCreate: (password: string) => invoke<void>("vault_create", { password }),
   vaultUnlock: (password: string) => invoke<void>("vault_unlock", { password }),

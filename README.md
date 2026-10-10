@@ -1,13 +1,140 @@
 # Quayline
 
+**[English](#english)** · **[Français](#français)**
+
+## English
+
+A security-focused SSH and SFTP client for Linux (Fedora, KDE Plasma and GNOME) and
+macOS. Servers, credentials and keys are kept in an encrypted vault, on your machine
+only.
+
+The interface is available in English and French (Settings → Appearance → Language).
+
+### Features
+
+- **Tabbed SSH terminal** and dual-pane **SFTP browser** (drag and drop, background
+  transfers); each one opens from the other.
+- **Encrypted vault** for servers, passwords and SSH keys, with encrypted export and
+  import for backups or moving to another computer.
+- **Unlocking** with the master password, a **FIDO2 security key** (YubiKey,
+  Nitrokey…) or an **OpenID Connect identity provider** (Pocket ID; Authentik,
+  Authelia, Keycloak, Microsoft Entra ID and Google in beta), including from a phone
+  via a QR code.
+- **Automatic lock** after inactivity, when the session or screen is locked, and
+  before sleep.
+- **Host key** verification (blocking alert if it changes), password copy with
+  automatic clipboard clearing, light or dark theme.
+
+### Security
+
+The full model is described in [docs/securite.md](docs/securite.md) (in French). In
+short:
+
+- **Vault**: master password → Argon2id (256 MiB, 3 passes) → key protecting a random
+  data key → XChaCha20-Poly1305. Everything is encrypted, including the server list;
+  any tampering with the file is detected.
+- **Memory**: secrets are wiped after use, core dumps are disabled, the process cannot
+  be traced.
+- **Isolated interface**: no secret is ever sent back to the web interface; strict
+  content security policy, no remote resources.
+- **Signed packages**: the RPM and the Flatpak come with checksums signed with the
+  project key ([packaging/signing-key.asc](packaging/signing-key.asc)); the macOS app is
+  signed and notarized by Apple.
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+> ⚠️ The master password **cannot be recovered**. Back up the vault file (it is
+> encrypted) or use the encrypted export, and keep the password somewhere safe.
+
+### Install
+
+#### Fedora
+
+From the latest [release](https://github.com/Meme-Pas-Dev/quayline/releases), download
+the RPM (`Quayline-X.Y.Z-N.x86_64.rpm`), `SHA256SUMS` and `SHA256SUMS.asc`, then check
+the signature and checksum before installing:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/Meme-Pas-Dev/quayline/main/packaging/signing-key.asc
+gpg --dearmor < signing-key.asc > quayline.gpg
+gpgv --keyring ./quayline.gpg SHA256SUMS.asc SHA256SUMS   # checksum signature
+sha256sum -c --ignore-missing SHA256SUMS                    # package checksum
+sudo dnf install ./Quayline-*.x86_64.rpm
+```
+
+To update, follow the same steps with the new release (`dnf` replaces the previous
+version and keeps the vault).
+
+The Flatpak is checked the same way with `SHA256SUMS.flatpak` and
+`SHA256SUMS.flatpak.asc`, then installed with `flatpak install --user ./quayline.flatpak`
+(GNOME runtime from Flathub). Its vault is stored in `~/.var/app/dev.memepas.quayline/`.
+
+#### macOS (Apple Silicon)
+
+Download `Quayline-X.Y.Z-macos-arm64.dmg` from the
+[releases](https://github.com/Meme-Pas-Dev/quayline/releases), then drag Quayline into
+Applications. The app is signed (Developer ID) and notarized by Apple. The vault is
+stored in `~/Library/Application Support/dev.memepas.quayline/`.
+
+### Usage
+
+- **Identity provider unlock**: Settings → Identity provider (OIDC). The instructions
+  adapt to the chosen provider; the master password remains valid at all times.
+- **FIDO2 security keys**: Settings → Security keys → Add a key. No secret is stored:
+  the key recomputes it at each unlock. Register a second key as a backup.
+- **Shortcuts**: `Ctrl+Shift+L` (`Cmd+Shift+L` on macOS) locks;
+  `Ctrl+Shift+C` / `Ctrl+Shift+V` copy and paste in the terminal. Right-click a session
+  or a server for other actions.
+
+### Build
+
+```bash
+# Fedora: system dependencies
+sudo dnf install webkit2gtk4.1-devel openssl-devel librsvg2-devel systemd-devel nodejs
+sudo dnf group install c-development
+# Rust: https://rustup.rs
+
+npm ci
+npm run tauri dev                      # development run
+npm run tauri build -- --bundles rpm   # RPM package in target/release/bundle/rpm/
+```
+
+Tests:
+
+```bash
+cargo test --workspace
+cargo clippy --workspace --all-targets
+npm run check
+```
+
+Code layout:
+
+```
+crates/vault/   Vault: format, cryptography, data model
+src-tauri/      Tauri application: commands, state, process hardening
+src/            Interface (Svelte, TypeScript)
+```
+
+Translations live in `src/lib/i18n/en.json` and `fr.json`, shared by the interface and
+the backend; `npm run check` verifies that both catalogs match.
+
+### License
+
+Quayline is free software, distributed under the
+[GNU GPL version 3 or later](LICENSE). Any modified version that is redistributed
+must be released under the same license, with its source code.
+
+---
+
+## Français
+
 Client SSH et SFTP pour Linux (Fedora, KDE Plasma et GNOME) et macOS, pensé pour la
 sécurité. Serveurs, identifiants et clés sont rangés dans un coffre chiffré, sur votre
 machine uniquement.
 
-*A security-focused SSH/SFTP client for Linux and macOS, with a locally encrypted
-vault. The interface is in French.*
+L'interface est en français et en anglais (Réglages → Apparence → Langue).
 
-## Fonctionnalités
+### Fonctionnalités
 
 - **Terminal SSH** à onglets, **explorateur SFTP** en double panneau (glisser-déposer,
   transferts en arrière-plan), ouverture de l'un depuis l'autre.
@@ -22,7 +149,7 @@ vault. The interface is in French.*
 - Vérification des **clés d'hôte** (alerte bloquante si elle change), copie des mots de
   passe avec effacement automatique du presse-papiers, thème clair ou sombre.
 
-## Sécurité
+### Sécurité
 
 Le modèle complet est décrit dans [docs/securite.md](docs/securite.md). En bref :
 
@@ -42,49 +169,37 @@ Pour signaler une faille : voir [SECURITY.md](SECURITY.md).
 > ⚠️ Le mot de passe maître est **irrécupérable**. Sauvegardez le fichier du coffre (il
 > est chiffré) ou utilisez l'export chiffré, et gardez le mot de passe en lieu sûr.
 
-## Installer
+### Installer
 
-### Fedora
+#### Fedora
 
-Les paquets sont publiés dans les [releases](https://github.com/Meme-Pas-Dev/quayline/releases). Le plus simple est le
-script [`scripts/manage.sh`](scripts/manage.sh) : il affiche la version installée,
-propose le RPM ou le Flatpak, vérifie la signature et l'empreinte du paquet, puis
-installe, met à jour ou supprime. Le coffre n'est jamais effacé sans confirmation.
-
-```bash
-git clone https://github.com/Meme-Pas-Dev/quayline.git
-quayline/scripts/manage.sh
-```
-
-[`scripts/install-latest.sh`](scripts/install-latest.sh) fait de même pour le RPM, sans
-questions.
-
-**À la main**, depuis une release :
+Télécharger depuis la dernière [release](https://github.com/Meme-Pas-Dev/quayline/releases)
+le RPM (`Quayline-X.Y.Z-N.x86_64.rpm`), `SHA256SUMS` et `SHA256SUMS.asc`, puis vérifier
+la signature et l'empreinte avant d'installer :
 
 ```bash
-gpg --dearmor < packaging/signing-key.asc > quayline.gpg
+curl -fsSLO https://raw.githubusercontent.com/Meme-Pas-Dev/quayline/main/packaging/signing-key.asc
+gpg --dearmor < signing-key.asc > quayline.gpg
 gpgv --keyring ./quayline.gpg SHA256SUMS.asc SHA256SUMS   # signature des empreintes
 sha256sum -c --ignore-missing SHA256SUMS                    # empreinte du paquet
 sudo dnf install ./Quayline-*.x86_64.rpm
 ```
 
-Le Flatpak s'installe avec `flatpak install --user ./quayline.flatpak` (runtime GNOME
-de Flathub). Son coffre est rangé dans `~/.var/app/dev.memepas.quayline/`.
+Pour une mise à jour, même procédure avec la nouvelle release (`dnf` remplace
+l'ancienne version et garde le coffre).
 
-### macOS (Apple Silicon)
+Le Flatpak se vérifie de la même façon avec `SHA256SUMS.flatpak` et
+`SHA256SUMS.flatpak.asc`, puis s'installe avec `flatpak install --user ./quayline.flatpak`
+(runtime GNOME de Flathub). Son coffre est rangé dans `~/.var/app/dev.memepas.quayline/`.
+
+#### macOS (Apple Silicon)
 
 Télécharger `Quayline-X.Y.Z-macos-arm64.dmg` dans les [releases](https://github.com/Meme-Pas-Dev/quayline/releases), puis
 glisser Quayline dans Applications. L'application est signée (Developer ID) et
-notarisée par Apple.
+notarisée par Apple. Le coffre est rangé dans
+`~/Library/Application Support/dev.memepas.quayline/`.
 
-Avec Homebrew, qui compile l'application sur le Mac :
-
-```bash
-brew tap Meme-Pas-Dev/quayline
-brew install quayline
-```
-
-## Utilisation
+### Utilisation
 
 - **Déverrouillage par fournisseur d'identité** : Réglages → Fournisseur d'identité
   (OIDC). La marche à suivre s'adapte au fournisseur choisi ; le mot de passe maître
@@ -96,7 +211,7 @@ brew install quayline
   `Ctrl+Maj+C` / `Ctrl+Maj+V` copient et collent dans le terminal. Clic droit sur une
   session ou un serveur pour les autres actions.
 
-## Compiler
+### Compiler
 
 ```bash
 # Fedora : dépendances système
@@ -125,7 +240,10 @@ src-tauri/      Application Tauri : commandes, état, durcissement du processus
 src/            Interface (Svelte, TypeScript)
 ```
 
-## Licence
+Les traductions sont dans `src/lib/i18n/en.json` et `fr.json`, communes à l'interface et
+au backend ; `npm run check` vérifie que les deux catalogues concordent.
+
+### Licence
 
 Quayline est un logiciel libre, distribué sous licence
 [GNU GPL version 3 ou ultérieure](LICENSE). Toute version modifiée et redistribuée doit

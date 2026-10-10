@@ -8,11 +8,11 @@ pub fn harden_process() {
     unsafe {
         let zero = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
         if libc::setrlimit(libc::RLIMIT_CORE, &zero) != 0 {
-            eprintln!("{}: impossible de désactiver les core dumps", crate::identity::SLUG);
+            eprintln!("{}: cannot disable core dumps", crate::identity::SLUG);
         }
         #[cfg(not(debug_assertions))]
         if libc::ptrace(libc::PT_DENY_ATTACH, 0, std::ptr::null_mut(), 0) != 0 {
-            eprintln!("{}: impossible d'activer PT_DENY_ATTACH", crate::identity::SLUG);
+            eprintln!("{}: cannot enable PT_DENY_ATTACH", crate::identity::SLUG);
         }
     }
 }

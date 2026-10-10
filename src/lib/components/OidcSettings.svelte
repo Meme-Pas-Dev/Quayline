@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { t } from "../i18n/index.svelte";
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
   import { onMount } from "svelte";
   import { api, errorCode, errorMessage, type OidcProviderId, type OidcStatus } from "../api";
   import { APP_NAME } from "../identity";
-  import { OIDC_PROVIDERS, oidcProvider } from "../oidcProviders";
+  import { OIDC_PROVIDERS, oidcProvider, providerName } from "../oidcProviders";
   import { handleError } from "../store.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import Icon from "./Icon.svelte";
@@ -86,7 +87,7 @@
 
   async function copyRedirect() {
     await writeText(redirectUri);
-    toast("Adresse de retour copiée", "success");
+    toast(t("oidc.redirectCopied"), "success");
   }
 
   async function enroll(e: SubmitEvent) {
@@ -108,7 +109,7 @@
         },
         password,
       );
-      toast(`${provider.name} activé pour ${identity.name ?? identity.email ?? identity.subject}`, "success", 5000);
+      toast(t("oidc.enabledFor", { provider: providerName(providerId), account: identity.name ?? identity.subject }), "success", 5000);
       editing = false;
       await load();
     } catch (err) {
@@ -125,7 +126,7 @@
     confirmDisable = false;
     try {
       await api.oidcDisable();
-      toast("Fournisseur d'identité désactivé", "success");
+      toast(t("oidc.disabled"), "success");
       await load();
     } catch (e) {
       handleError(e);
@@ -134,54 +135,57 @@
 </script>
 
 <section class="card">
-  <h2><Icon name="user" size={17} /> Fournisseur d'identité (OIDC)</h2>
+  <h2><Icon name="user" size={17} /> {t("oidc.title")}</h2>
 
   {#if !loaded}
-    <p class="hint">Chargement…</p>
+    <p class="hint">{t("files.loading")}</p>
   {:else if status && !editing}
     <p class="hint">
-      Le coffre peut être déverrouillé avec votre compte {status.providerName}. Le mot de passe maître reste valable.
+      {status.provider === "generic"
+        ? t("oidc.enabledHintGeneric")
+        : t("oidc.enabledHint", { provider: providerName(status.provider) })}
     </p>
     <dl>
-      <dt>Compte</dt>
+      <dt>{t("oidc.account")}</dt>
       <dd>{status.account}</dd>
-      <dt>Fournisseur</dt>
+      <dt>{t("oidc.provider")}</dt>
       <dd>
-        {oidcProvider(status.provider).name}
-        {#if oidcProvider(status.provider).beta}<span class="beta">Bêta</span>{/if}
+        {providerName(status.provider)}
+        {#if oidcProvider(status.provider).beta}<span class="beta">{t("oidc.beta")}</span>{/if}
       </dd>
-      <dt>Instance</dt>
+      <dt>{t("oidc.instance")}</dt>
       <dd class="mono">{status.issuer}</dd>
       <dt>Client ID</dt>
       <dd class="mono">{status.clientId}</dd>
-      <dt>Adresse de retour</dt>
+      <dt>{t("oidc.redirectAddress")}</dt>
       <dd class="mono">{status.redirectUri}</dd>
       {#if status.requiredGroup}
-        <dt>Groupe exigé</dt>
+        <dt>{t("oidc.requiredGroup")}</dt>
         <dd>{status.requiredGroup}</dd>
       {/if}
-      <dt>Scopes</dt>
+      <dt>{t("oidc.scopes")}</dt>
       <dd class="mono">{status.scopes}</dd>
       {#if status.hasClientSecret}
-        <dt>Secret client</dt>
-        <dd>Enregistré</dd>
+        <dt>{t("oidc.clientSecret")}</dt>
+        <dd>{t("oidc.saved")}</dd>
       {/if}
     </dl>
     <div class="actions">
-      <button class="btn" onclick={startEdit}>Reconfigurer</button>
-      <button class="btn danger" onclick={() => (confirmDisable = true)}>Désactiver</button>
+      <button class="btn" onclick={startEdit}>{t("oidc.reconfigure")}</button>
+      <button class="btn danger" onclick={() => (confirmDisable = true)}>{t("oidc.disable")}</button>
     </div>
   {:else if !editing}
     <p class="hint">
-      Déverrouillez {APP_NAME} avec votre compte <strong>Pocket ID</strong>, <strong>Authentik</strong>,
-      <strong>Authelia</strong>, <strong>Keycloak</strong>, <strong>Microsoft Entra ID</strong>, <strong>Google</strong>
-      ou tout autre fournisseur OpenID Connect, au lieu de saisir le mot de passe maître.
+      {t("oidc.intro.before", { app: APP_NAME })}<strong>Pocket ID</strong>, <strong>Authentik</strong>,
+      <strong>Authelia</strong>, <strong>Keycloak</strong>, <strong>Microsoft Entra ID</strong>{t("oidc.intro.or")}<strong
+        >Google</strong
+      >{t("oidc.intro.after")}
     </p>
     <div class="actions">
-      <button class="btn primary" onclick={startEdit}>Configurer</button>
+      <button class="btn primary" onclick={startEdit}>{t("oidc.configure")}</button>
     </div>
   {:else}
-    <div class="providers" role="radiogroup" aria-label="Fournisseur d'identité">
+    <div class="providers" role="radiogroup" aria-label={t("oidc.providerGroup")}>
       {#each OIDC_PROVIDERS as p (p.id)}
         <button
           type="button"
@@ -192,39 +196,38 @@
           onclick={() => selectProvider(p.id)}
           disabled={waiting}
         >
-          {p.name}
-          {#if p.beta}<span class="beta">Bêta</span>{/if}
+          {providerName(p.id)}
+          {#if p.beta}<span class="beta">{t("oidc.beta")}</span>{/if}
         </button>
       {/each}
     </div>
 
     <ol class="steps">
-      {#each provider.before as step, i (i)}<li>{step}</li>{/each}
+      {#each provider.before as step, i (i)}<li>{t(step)}</li>{/each}
       <li>
-        {provider.redirectLabel ?? "URL de rappel (redirect URI) :"}
+        {t(provider.redirectLabel ?? "oidc.redirectStep")}
         <span class="uri">
           <code>{redirectUri}</code>
-          <button class="btn ghost icon tiny" title="Copier" onclick={copyRedirect}><Icon name="copy" size={14} /></button>
+          <button class="btn ghost icon tiny" title={t("common.copy")} onclick={copyRedirect}><Icon name="copy" size={14} /></button>
         </span>
       </li>
-      {#each provider.after as step, i (i)}<li>{step}</li>{/each}
+      {#each provider.after as step, i (i)}<li>{t(step)}</li>{/each}
     </ol>
-    <p class="note"><Icon name="phone" size={13} /> Connexion par QR code : {provider.phone}</p>
+    <p class="note"><Icon name="phone" size={13} /> {t("oidc.qrNote", { note: t(provider.phone) })}</p>
     {#if provider.beta}
       <p class="note beta-note">
-        <Icon name="alert" size={13} /> Bêta : ce modèle n'a pas encore été essayé en conditions réelles. Le mot de passe
-        maître reste valable ; signalez tout problème.
+        <Icon name="alert" size={13} /> {t("oidc.betaNote")}
       </p>
     {/if}
 
     <form id="oidc-form" class="grid" onsubmit={(e) => { e.preventDefault(); if (formValid) askPassword = true; }}>
       <label class="field span2">
-        <span>Adresse de l'instance (issuer)</span>
-        <input class="input" bind:value={issuer} placeholder={provider.issuerPlaceholder} spellcheck="false" />
-        {#if provider.issuerHint}<small class="field-hint">{provider.issuerHint}</small>{/if}
+        <span>{t("oidc.issuerLabel")}</span>
+        <input class="input" bind:value={issuer} placeholder={t(provider.issuerPlaceholder)} spellcheck="false" />
+        {#if provider.issuerHint}<small class="field-hint">{t(provider.issuerHint)}</small>{/if}
       </label>
       <label class="field">
-        <span>Port de retour</span>
+        <span>{t("oidc.port")}</span>
         <input class="input" type="number" min="1024" max="65535" bind:value={port} />
       </label>
       <label class="field span2">
@@ -233,35 +236,35 @@
       </label>
       {#if provider.groupPlaceholder}
         <label class="field">
-          <span>Groupe exigé</span>
-          <input class="input" bind:value={group} placeholder={provider.groupPlaceholder} spellcheck="false" />
-          {#if provider.groupHint}<small class="field-hint">{provider.groupHint}</small>{/if}
+          <span>{t("oidc.requiredGroup")}</span>
+          <input class="input" bind:value={group} placeholder={t(provider.groupPlaceholder)} spellcheck="false" />
+          {#if provider.groupHint}<small class="field-hint">{t(provider.groupHint)}</small>{/if}
         </label>
       {/if}
       {#if provider.secretRequired}
         <label class="field span3">
-          <span>Secret client</span>
-          <PasswordInput bind:value={clientSecret} placeholder={status?.hasClientSecret ? "À ressaisir" : ""} />
+          <span>{t("oidc.clientSecret")}</span>
+          <PasswordInput bind:value={clientSecret} placeholder={status?.hasClientSecret ? t("oidc.secretRetype") : ""} />
         </label>
       {/if}
 
       <details class="span3" bind:open={advanced}>
-        <summary>Options avancées</summary>
+        <summary>{t("oidc.advanced")}</summary>
         <div class="grid inner">
           <label class="field span2">
-            <span>Scopes</span>
+            <span>{t("oidc.scopes")}</span>
             <input class="input mono" bind:value={scopes} spellcheck="false" />
-            <small class="field-hint">Séparés par des espaces ; « openid » est obligatoire.</small>
+            <small class="field-hint">{t("oidc.scopesHint")}</small>
           </label>
           <label class="field">
-            <span>Donnée des groupes</span>
+            <span>{t("oidc.groupsClaim")}</span>
             <input class="input mono" bind:value={groupsClaim} spellcheck="false" />
-            <small class="field-hint">Nom ou chemin pointé (realm_access.roles).</small>
+            <small class="field-hint">{t("oidc.groupsClaimHint")}</small>
           </label>
           {#if !provider.secretRequired}
             <label class="field span3">
-              <span>Secret client</span>
-              <PasswordInput bind:value={clientSecret} placeholder="Facultatif : client public de préférence" />
+              <span>{t("oidc.clientSecret")}</span>
+              <PasswordInput bind:value={clientSecret} placeholder={t("oidc.secretOptional")} />
             </label>
           {/if}
         </div>
@@ -272,44 +275,47 @@
       <div class="wait">
         <span class="spinner"></span>
         <div>
-          <strong>Connexion en cours dans votre navigateur…</strong>
-          <span>Authentifiez-vous sur {provider.id === "generic" ? "votre fournisseur" : provider.name}, puis revenez ici.</span>
+          <strong>{t("lock.browserWaiting")}</strong>
+          <span>{t("oidc.signInWith", { provider: provider.id === "generic" ? t("oidc.yourProvider") : providerName(provider.id) })}</span>
         </div>
-        <button class="btn ghost" onclick={() => api.oidcCancel()}>Annuler</button>
+        <button class="btn ghost" onclick={() => api.oidcCancel()}>{t("common.cancel")}</button>
       </div>
     {/if}
     {#if error}<p class="error-text">{error}</p>{/if}
 
     <div class="actions">
-      <button class="btn" onclick={() => (editing = false)} disabled={waiting}>Annuler</button>
+      <button class="btn" onclick={() => (editing = false)} disabled={waiting}>{t("common.cancel")}</button>
       <button class="btn primary" type="submit" form="oidc-form" disabled={!formValid || waiting}>
-        <Icon name="shield" size={16} /> Tester et activer
+        <Icon name="shield" size={16} /> {t("oidc.testEnable")}
       </button>
     </div>
   {/if}
 </section>
 
 {#if askPassword}
-  <Modal title="Confirmer avec le mot de passe maître" onclose={() => (askPassword = false)} width={440}>
+  <Modal title={t("oidc.confirmTitle")} onclose={() => (askPassword = false)} width={440}>
     <form id="oidc-password" class="pw" onsubmit={enroll}>
       <p class="hint">
-        Pour activer {provider.id === "generic" ? "le fournisseur d'identité" : provider.name}, confirmez votre mot de
-        passe maître. Votre navigateur s'ouvrira ensuite sur <strong>{issuer.trim()}</strong>.
+        {t("oidc.confirmHint.before", {
+          provider: provider.id === "generic" ? t("oidc.theProvider") : providerName(provider.id),
+        })}<strong>{issuer.trim()}</strong>{t("oidc.confirmHint.after")}
       </p>
       <PasswordInput bind:value={password} autofocus />
     </form>
     {#snippet footer()}
-      <button class="btn" onclick={() => (askPassword = false)}>Annuler</button>
-      <button class="btn primary" type="submit" form="oidc-password" disabled={!password}>Continuer</button>
+      <button class="btn" onclick={() => (askPassword = false)}>{t("common.cancel")}</button>
+      <button class="btn primary" type="submit" form="oidc-password" disabled={!password}>{t("wizard.continue")}</button>
     {/snippet}
   </Modal>
 {/if}
 
 {#if confirmDisable}
   <ConfirmDialog
-    title="Désactiver le fournisseur d'identité ?"
-    message={`Le déverrouillage par ${status?.providerName ?? "le fournisseur d'identité"} sera supprimé et sa clé retirée du trousseau système. Le mot de passe maître restera le seul moyen d'ouvrir le coffre.`}
-    confirmLabel="Désactiver"
+    title={t("oidc.disableTitle")}
+    message={t("oidc.disableMessage", {
+      provider: status && status.provider !== "generic" ? providerName(status.provider) : t("oidc.theProvider"),
+    })}
+    confirmLabel={t("oidc.disable")}
     onconfirm={disable}
     onclose={() => (confirmDisable = false)}
   />

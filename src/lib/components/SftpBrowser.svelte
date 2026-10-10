@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t, tn } from "../i18n/index.svelte";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { onMount, untrack } from "svelte";
   import { api, errorMessage, type FileEntry, type SessionEvent } from "../api";
@@ -38,7 +39,7 @@
 
   const host = $derived(data.hosts.find((h) => h.id === tab.hostId));
   const ready = $derived(tab.status === "connected" && !!sftpId);
-  const myTransfers = $derived(transfers.filter((t) => t.sftpId === sftpId));
+  const myTransfers = $derived(transfers.filter((tr) => tr.sftpId === sftpId));
 
   // ── Chargement des listes ──
 
@@ -146,12 +147,12 @@
       loadLocal(home);
     });
 
-    const offFinished = onTransferFinished((t) => {
-      if (t.sftpId !== sftpId) return;
-      if (t.status === "error") toast(`${displayName(t.name)} : ${t.error}`, "error", 6000);
-      else if (t.status === "done" && t.skipped) toast(`${displayName(t.name)} : ${t.skipped} élément(s) ignoré(s)`, "info");
-      if (t.direction === "upload" && t.destination === remote.path) loadRemote();
-      if (t.direction === "download" && t.destination === local.path) loadLocal();
+    const offFinished = onTransferFinished((tr) => {
+      if (tr.sftpId !== sftpId) return;
+      if (tr.status === "error") toast(`${displayName(tr.name)} : ${tr.error}`, "error", 6000);
+      else if (tr.status === "done" && tr.skipped) toast(tn("sftp.skipped", tr.skipped, { name: displayName(tr.name) }), "info");
+      if (tr.direction === "upload" && tr.destination === remote.path) loadRemote();
+      if (tr.direction === "download" && tr.destination === local.path) loadLocal();
     });
 
     const unlisten = getCurrentWebview().onDragDropEvent((event) => {
@@ -186,8 +187,8 @@
     disconnectSeen = tab.disconnect;
     const id = untrack(() => sftpId);
     if (!id) return;
-    for (const t of untrack(() => transfers)) {
-      if (t.sftpId === id && t.status === "running") api.transferCancel(t.id).catch(() => {});
+    for (const tr of untrack(() => transfers)) {
+      if (tr.sftpId === id && tr.status === "running") api.transferCancel(tr.id).catch(() => {});
     }
     api.sftpClose(id).catch(() => {});
     sftpId = null;
@@ -207,11 +208,11 @@
       <span class="mono">{host ? `${host.username ?? ""}${host.username ? "@" : ""}${host.hostname}` : ""}</span>
     </div>
     {#if tab.status === "closed"}
-      <span class="err">{tab.error ?? "Connexion fermée."}</span>
-      <button class="btn sm-btn" onclick={() => reconnect(tab.key)}>Reconnecter</button>
-      <button class="btn ghost sm-btn" onclick={() => closeSession(tab.key)}>Fermer l'onglet</button>
+      <span class="err">{tab.error ?? t("sftp.connectionClosed")}</span>
+      <button class="btn sm-btn" onclick={() => reconnect(tab.key)}>{t("menu.reconnect")}</button>
+      <button class="btn ghost sm-btn" onclick={() => closeSession(tab.key)}>{t("terminal.closeTab")}</button>
     {:else if !ready}
-      <span class="muted">{tab.status === "authenticating" ? "Authentification…" : "Connexion…"}</span>
+      <span class="muted">{t(tab.status === "authenticating" ? "session.status.authenticating" : "session.status.connecting")}</span>
     {/if}
   </div>
 
@@ -219,13 +220,13 @@
     <FilePane
       bind:this={localPane}
       side="local"
-      title="Cet ordinateur"
+      title={t("sftp.thisComputer")}
       icon="laptop"
       path={local.path}
       entries={local.entries}
       loading={local.loading}
       error={local.error}
-      sendLabel="Envoyer"
+      sendLabel={t("sftp.upload")}
       sendIcon="upload"
       onnavigate={(p) => loadLocal(p)}
       onrefresh={() => loadLocal()}
@@ -233,7 +234,7 @@
       onmkdir={(name) => run(() => api.localMkdir(local.path, name), () => loadLocal())}
       onrename={(entry, name) => run(() => api.localRename(entry.path, name), () => loadLocal())}
       ondelete={(entries) =>
-        run(() => api.localTrash(entries.map((e) => e.path)), () => loadLocal(), "Déplacé vers la corbeille")}
+        run(() => api.localTrash(entries.map((e) => e.path)), () => loadLocal(), t("sftp.movedToTrash"))}
       onsend={(entries) => transfer("upload", entries.map((e) => e.path))}
       ondrop={(paths) => transfer("download", paths)}
     />
@@ -242,13 +243,13 @@
       <FilePane
         bind:this={remotePane}
         side="remote"
-        title={host?.label ?? "Serveur"}
+        title={host?.label ?? t("sftp.server")}
         icon="server"
         path={remote.path}
         entries={remote.entries}
         loading={remote.loading}
         error={remote.error}
-        sendLabel="Télécharger"
+        sendLabel={t("sftp.download")}
         sendIcon="download"
         onnavigate={(p) => loadRemote(p)}
         onrefresh={() => loadRemote()}
@@ -256,7 +257,7 @@
         onmkdir={(name) => run(() => api.sftpMkdir(sftpId!, remote.path, name), () => loadRemote())}
         onrename={(entry, name) => run(() => api.sftpRename(sftpId!, entry.path, name), () => loadRemote())}
         ondelete={(entries) =>
-          run(() => api.sftpDelete(sftpId!, entries.map((e) => e.path)), () => loadRemote(), "Supprimé")}
+          run(() => api.sftpDelete(sftpId!, entries.map((e) => e.path)), () => loadRemote(), t("sftp.deleted"))}
         onsend={(entries) => transfer("download", entries.map((e) => e.path))}
         ondrop={(paths) => transfer("upload", paths)}
       />
@@ -264,10 +265,10 @@
       <div class="placeholder">
         {#if tab.status === "closed"}
           <Icon name="alert" size={22} />
-          <span>{tab.error ?? "Connexion fermée."}</span>
+          <span>{tab.error ?? t("sftp.connectionClosed")}</span>
         {:else}
           <span class="spinner"></span>
-          <span>{tab.status === "authenticating" ? "Authentification…" : `Connexion à ${host?.hostname ?? ""}…`}</span>
+          <span>{tab.status === "authenticating" ? t("session.status.authenticating") : t("sftp.connectingTo", { host: host?.hostname ?? "" })}</span>
         {/if}
       </div>
     {/if}
@@ -276,32 +277,34 @@
   {#if myTransfers.length}
     <div class="transfers">
       <div class="thead">
-        <strong>Transferts</strong>
-        <button class="btn ghost sm-btn" onclick={() => sftpId && clearFinishedTransfers(sftpId)}>Effacer les terminés</button>
+        <strong>{t("sftp.transfers")}</strong>
+        <button class="btn ghost sm-btn" onclick={() => sftpId && clearFinishedTransfers(sftpId)}>{t("sftp.clearFinished")}</button>
       </div>
       <div class="tlist">
-        {#each myTransfers as t (t.id)}
-          <div class="transfer {t.status}">
-            <Icon name={t.direction === "upload" ? "upload" : "download"} size={15} />
+        {#each myTransfers as tr (tr.id)}
+          <div class="transfer {tr.status}">
+            <Icon name={tr.direction === "upload" ? "upload" : "download"} size={15} />
             <div class="tinfo">
               <div class="tline">
-                <span class="tname">{displayName(t.name)}</span>
+                <span class="tname">{displayName(tr.name)}</span>
                 <span class="tmeta">
-                  {#if t.status === "running"}
-                    {formatSize(t.done)} / {formatSize(t.total)} · {percent(t.done, t.total)} %
-                  {:else if t.status === "done"}
-                    Terminé · {formatSize(t.total)}{t.files > 1 ? ` · ${t.files} fichiers` : ""}{t.skipped ? ` · ${t.skipped} ignoré(s)` : ""}
-                  {:else if t.status === "cancelled"}
-                    Annulé
+                  {#if tr.status === "running"}
+                    {formatSize(tr.done)} / {formatSize(tr.total)} · {percent(tr.done, tr.total)} %
+                  {:else if tr.status === "done"}
+                    {t("sftp.done", { size: formatSize(tr.total) })}{tr.files > 1 ? t("sftp.files", { count: tr.files }) : ""}{tr.skipped
+                      ? tn("sftp.skippedShort", tr.skipped)
+                      : ""}
+                  {:else if tr.status === "cancelled"}
+                    {t("sftp.cancelled")}
                   {:else}
-                    {t.error}
+                    {tr.error}
                   {/if}
                 </span>
               </div>
-              <div class="progress"><span style:width="{t.status === 'done' ? 100 : percent(t.done, t.total)}%"></span></div>
+              <div class="progress"><span style:width="{tr.status === 'done' ? 100 : percent(tr.done, tr.total)}%"></span></div>
             </div>
-            {#if t.status === "running"}
-              <button class="btn ghost icon tbtn" title="Annuler" onclick={() => api.transferCancel(t.id)}><Icon name="x" size={14} /></button>
+            {#if tr.status === "running"}
+              <button class="btn ghost icon tbtn" title={t("common.cancel")} onclick={() => api.transferCancel(tr.id)}><Icon name="x" size={14} /></button>
             {/if}
           </div>
         {/each}
@@ -314,15 +317,16 @@
 
 {#if visible && conflict}
   {@const c = conflict}
-  <Modal title="Fichiers déjà présents" onclose={() => (conflict = null)} width={460}>
+  <Modal title={t("sftp.conflictTitle")} onclose={() => (conflict = null)} width={460}>
     <p class="muted">
-      {c.names.length === 1 ? `« ${c.names[0]} » existe déjà` : `${c.names.length} éléments existent déjà`}
-      dans <code>{c.destination}</code>. Les dossiers sont fusionnés ; que faire des fichiers existants ?
+      {c.names.length === 1 ? t("sftp.conflictOne", { name: c.names[0] }) : t("sftp.conflictMany", { count: c.names.length })}{t(
+        "sftp.conflictIn",
+      )}<code>{c.destination}</code>{t("sftp.conflictQuestion")}
     </p>
     {#snippet footer()}
-      <button class="btn" onclick={() => (conflict = null)}>Annuler</button>
-      <button class="btn" onclick={() => start(c.direction, c.paths, c.destination, false)}>Ignorer les existants</button>
-      <button class="btn primary" onclick={() => start(c.direction, c.paths, c.destination, true)}>Remplacer</button>
+      <button class="btn" onclick={() => (conflict = null)}>{t("common.cancel")}</button>
+      <button class="btn" onclick={() => start(c.direction, c.paths, c.destination, false)}>{t("sftp.skipExisting")}</button>
+      <button class="btn primary" onclick={() => start(c.direction, c.paths, c.destination, true)}>{t("sftp.replace")}</button>
     {/snippet}
   </Modal>
 {/if}

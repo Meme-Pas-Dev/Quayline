@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t, type MessageKey } from "../i18n/index.svelte";
   import { onMount } from "svelte";
   import Icon, { type IconName } from "../components/Icon.svelte";
   import Logo from "../components/Logo.svelte";
@@ -27,18 +28,18 @@
 
   let { onlock, onlocked }: { onlock: () => void; onlocked: () => void } = $props();
 
-  const nav: { id: View; label: string; icon: IconName; count?: () => number }[] = [
-    { id: "hosts", label: "Hôtes", icon: "server", count: () => data.hosts.length },
-    { id: "keychain", label: "Trousseau", icon: "key", count: () => data.identities.length },
-    { id: "settings", label: "Réglages", icon: "settings" },
+  const nav: { id: View; label: MessageKey; icon: IconName; count?: () => number }[] = [
+    { id: "hosts", label: "nav.hosts", icon: "server", count: () => data.hosts.length },
+    { id: "keychain", label: "nav.keychain", icon: "key", count: () => data.identities.length },
+    { id: "settings", label: "nav.settings", icon: "settings" },
   ];
 
   const statusLabel = {
-    connecting: "Connexion…",
-    authenticating: "Authentification…",
-    connected: "Connecté",
-    closed: "Déconnecté",
-  };
+    connecting: "session.status.connecting",
+    authenticating: "session.status.authenticating",
+    connected: "session.status.connected",
+    closed: "session.status.closed",
+  } as const;
 
   // Menu du clic droit sur une session.
   let menu = $state<{ key: string; x: number; y: number } | null>(null);
@@ -101,26 +102,26 @@
       {#each nav as item}
         <button class="nav-item" class:active={!ui.active && ui.view === item.id} onclick={() => showView(item.id)}>
           <Icon name={item.icon} size={17} />
-          <span>{item.label}</span>
+          <span>{t(item.label)}</span>
           {#if item.count && data.loaded}<em>{item.count()}</em>{/if}
         </button>
       {/each}
     </nav>
 
     {#if ui.sessions.length}
-      <h3>Sessions</h3>
+      <h3>{t("shell.sessions")}</h3>
       <div class="sessions">
         {#each ui.sessions as s (s.key)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div class="session-item" class:active={ui.active === s.key} oncontextmenu={(e) => openMenu(e, s.key)}>
-            <button class="session-main" onclick={() => (ui.active = s.key)} title={statusLabel[s.status]}>
+            <button class="session-main" onclick={() => (ui.active = s.key)} title={t(statusLabel[s.status])}>
               <span class="dot {s.status}" class:pending={s.pending}></span>
               <span class="label">{s.label}</span>
-              <span class="kind" title={s.kind === "sftp" ? "Explorateur SFTP" : "Terminal SSH"}>
+              <span class="kind" title={t(s.kind === "sftp" ? "shell.sftpBrowser" : "shell.sshTerminal")}>
                 <Icon name={s.kind === "sftp" ? "folder" : "terminal"} size={13} />
               </span>
             </button>
-            <button class="close" onclick={() => closeSession(s.key)} aria-label="Fermer la session">
+            <button class="close" onclick={() => closeSession(s.key)} aria-label={t("shell.closeSession")}>
               <Icon name="x" size={14} />
             </button>
           </div>
@@ -130,9 +131,9 @@
 
     <div class="spacer"></div>
 
-    <button class="nav-item lock" onclick={onlock} title="Verrouiller ({KEYS.lock})">
+    <button class="nav-item lock" onclick={onlock} title={t("shell.lockTitle", { keys: KEYS.lock })}>
       <Icon name="lock" size={17} />
-      <span>Verrouiller</span>
+      <span>{t("shell.lock")}</span>
       <kbd>{KEYS.lockShort}</kbd>
     </button>
   </aside>
@@ -165,25 +166,25 @@
     <div class="menu-head">{menuSession.label} · {menuSession.kind === "sftp" ? "SFTP" : "SSH"}</div>
     {#if menuSession.kind === "ssh"}
       <button role="menuitem" disabled={!menuHost} onclick={() => act((k) => openFromSession(k, "other"))}>
-        <Icon name="folder" size={15} /> Ouvrir en SFTP
+        <Icon name="folder" size={15} /> {t("menu.openSftp")}
       </button>
     {:else}
       <button role="menuitem" disabled={!menuHost} onclick={() => act((k) => openFromSession(k, "other"))}>
-        <Icon name="terminal" size={15} /> Ouvrir un terminal SSH
+        <Icon name="terminal" size={15} /> {t("menu.openSsh")}
       </button>
     {/if}
     <button role="menuitem" disabled={!menuHost} onclick={() => act((k) => openFromSession(k, "same"))}>
-      <Icon name="copy" size={15} /> Dupliquer la session
+      <Icon name="copy" size={15} /> {t("menu.duplicateSession")}
     </button>
     <div class="sep"></div>
     <button role="menuitem" disabled={menuSession.status !== "closed" || !menuHost} onclick={() => act(reconnect)}>
-      <Icon name="refresh" size={15} /> Reconnecter
+      <Icon name="refresh" size={15} /> {t("menu.reconnect")}
     </button>
     <button role="menuitem" disabled={menuSession.status !== "connected"} onclick={() => act(disconnectSession)}>
-      <Icon name="power" size={15} /> Se déconnecter
+      <Icon name="power" size={15} /> {t("menu.disconnect")}
     </button>
     <button role="menuitem" class="danger" onclick={() => act(closeSession)}>
-      <Icon name="x" size={15} /> Fermer
+      <Icon name="x" size={15} /> {t("menu.close")}
     </button>
   </div>
 {/if}

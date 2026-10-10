@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t, tn } from "../i18n/index.svelte";
   import type { FileEntry } from "../api";
   import { displayName, formatDate, formatSize } from "../format";
   import ConfirmDialog from "./ConfirmDialog.svelte";
@@ -217,18 +218,18 @@
       <strong>{title}</strong>
     </div>
     <div class="tools">
-      <button class="btn ghost icon sm" title="Dossier parent (Retour arrière)" onclick={() => onnavigate(parentOf(path))}>
+      <button class="btn ghost icon sm" title={t("files.parent")} onclick={() => onnavigate(parentOf(path))}>
         <Icon name="arrowUp" size={16} />
       </button>
-      <button class="btn ghost icon sm" title="Dossier personnel" onclick={onhome}><Icon name="home" size={16} /></button>
-      <button class="btn ghost icon sm" title="Actualiser (F5)" onclick={onrefresh}><Icon name="refresh" size={16} /></button>
-      <button class="btn ghost icon sm" title="Nouveau dossier" onclick={() => (dialog = { kind: "mkdir" })}>
+      <button class="btn ghost icon sm" title={t("files.home")} onclick={onhome}><Icon name="home" size={16} /></button>
+      <button class="btn ghost icon sm" title={t("files.refresh")} onclick={onrefresh}><Icon name="refresh" size={16} /></button>
+      <button class="btn ghost icon sm" title={t("files.newFolder")} onclick={() => (dialog = { kind: "mkdir" })}>
         <Icon name="folderPlus" size={16} />
       </button>
       <button
         class="btn ghost icon sm"
         class:on={showHidden}
-        title={showHidden ? "Masquer les fichiers cachés" : `Afficher les fichiers cachés (${hiddenCount})`}
+        title={showHidden ? t("files.hideHidden") : t("files.showHidden", { count: hiddenCount })}
         onclick={() => (showHidden = !showHidden)}
       >
         <Icon name={showHidden ? "eye" : "eyeOff"} size={16} />
@@ -252,7 +253,7 @@
     {:else}
       <button
         class="crumbs"
-        title="Saisir un chemin"
+        title={t("files.enterPath")}
         ondblclick={() => {
           pathInput = path;
           editingPath = true;
@@ -273,7 +274,7 @@
       </button>
       <button
         class="btn ghost icon sm edit"
-        title="Saisir un chemin"
+        title={t("files.enterPath")}
         onclick={() => {
           pathInput = path;
           editingPath = true;
@@ -284,17 +285,17 @@
 
   <div class="table">
     <div class="thead">
-      <span>Nom</span>
-      <span class="num">Taille</span>
-      <span>Modifié</span>
+      <span>{t("files.name")}</span>
+      <span class="num">{t("files.size")}</span>
+      <span>{t("files.modified")}</span>
     </div>
     <div class="tbody">
       {#if error}
         <div class="state error"><Icon name="alert" size={18} /> {error}</div>
       {:else if loading && entries.length === 0}
-        <div class="state">Chargement…</div>
+        <div class="state">{t("files.loading")}</div>
       {:else if visible.length === 0}
-        <div class="state">Dossier vide{hiddenCount && !showHidden ? ` (${hiddenCount} fichier(s) caché(s))` : ""}</div>
+        <div class="state">{t("files.empty")}{hiddenCount && !showHidden ? tn("files.hiddenCount", hiddenCount) : ""}</div>
       {/if}
       {#each visible as entry (entry.path)}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -324,9 +325,9 @@
   <footer>
     <span class="count">
       {#if selection.length}
-        {selection.length} sélectionné{selection.length > 1 ? "s" : ""}
+        {tn("files.selected", selection.length)}
       {:else}
-        {visible.length} élément{visible.length > 1 ? "s" : ""}
+        {tn("files.items", visible.length)}
       {/if}
     </span>
     <button class="btn sm-btn" disabled={!selection.length} onclick={() => onsend(selection)}>
@@ -338,15 +339,15 @@
   {#if menu}
     <div class="menu" style:left="{menu.x}px" style:top="{menu.y}px" role="menu">
       {#if selection.length === 1 && menu.entry.isDir}
-        <button onclick={() => onnavigate(menu!.entry.path)}><Icon name="folder" size={15} /> Ouvrir</button>
+        <button onclick={() => onnavigate(menu!.entry.path)}><Icon name="folder" size={15} /> {t("files.open")}</button>
       {/if}
       <button onclick={() => onsend(selection)}><Icon name={sendIcon} size={15} /> {sendLabel}</button>
       {#if selection.length === 1}
-        <button onclick={() => (dialog = { kind: "rename", entry: menu!.entry })}><Icon name="edit" size={15} /> Renommer</button>
+        <button onclick={() => (dialog = { kind: "rename", entry: menu!.entry })}><Icon name="edit" size={15} /> {t("files.rename")}</button>
       {/if}
       <button class="danger" onclick={() => (dialog = { kind: "delete", entries: selection })}>
         <Icon name="trash" size={15} />
-        {side === "local" ? "Mettre à la corbeille" : "Supprimer"}
+        {side === "local" ? t("files.moveToTrash") : t("common.delete")}
       </button>
     </div>
   {/if}
@@ -354,9 +355,9 @@
 
 {#if dialog?.kind === "mkdir"}
   <PromptDialog
-    title="Nouveau dossier"
-    label="Nom du dossier"
-    confirmLabel="Créer"
+    title={t("files.newFolder")}
+    label={t("files.folderName")}
+    confirmLabel={t("files.create")}
     onsubmit={(name) => {
       dialog = null;
       onmkdir(name);
@@ -366,10 +367,10 @@
 {:else if dialog?.kind === "rename"}
   {@const entry = dialog.entry}
   <PromptDialog
-    title="Renommer"
-    label="Nouveau nom"
+    title={t("files.rename")}
+    label={t("files.newName")}
     initial={entry.name}
-    confirmLabel="Renommer"
+    confirmLabel={t("files.rename")}
     onsubmit={(name) => {
       // Agir avant de fermer : `entry` est dérivé de `dialog`.
       if (name !== entry.name) onrename(entry, name);
@@ -380,12 +381,13 @@
 {:else if dialog?.kind === "delete"}
   {@const list = dialog.entries}
   <ConfirmDialog
-    title={side === "local" ? "Mettre à la corbeille ?" : "Supprimer définitivement ?"}
-    message={(list.length === 1 ? `« ${displayName(list[0].name)} »` : `${list.length} éléments`) +
-      (side === "local"
-        ? " sera déplacé vers la corbeille."
-        : (list.some((e) => e.kind === "dir") ? " et tout son contenu" : "") + " sera supprimé du serveur. Cette action est irréversible.")}
-    confirmLabel={side === "local" ? "Mettre à la corbeille" : "Supprimer"}
+    title={side === "local" ? t("files.trashTitle") : t("files.deleteTitle")}
+    message={tn(
+      side === "local" ? "files.trashMessage" : list.some((e) => e.kind === "dir") ? "files.deleteDirMessage" : "files.deleteMessage",
+      list.length,
+      { name: displayName(list[0].name) },
+    )}
+    confirmLabel={side === "local" ? t("files.moveToTrash") : t("common.delete")}
     onconfirm={() => {
       ondelete(list);
       dialog = null;
