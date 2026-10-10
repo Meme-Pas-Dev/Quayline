@@ -1,0 +1,169 @@
+name: RPM Fedora
+
+# Étiquettes de version : RPM signé de la release, construit uniquement dans le dépôt
+# public (Meme-Pas-Dev/quayline), qui reçoit chaque version depuis le dépôt de
+# développement (workflow « Publication »). Lancement manuel possible partout (onglet
+# Actions → RPM Fedora → Run workflow). Les versions en cours se testent aussi en
+# compilant sur place : scripts/manage.sh, option « Compiler ici ».
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Économie de disque (la machine GitHub n'a que ~14 Go) : pas de symboles de
+# débogage ni de compilation incrémentale pour les tests et clippy.
+env:
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  rpm:
+    name: Tests et paquet RPM (Fedora 44)
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/quayline'
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    steps:
+      - name: Dépendances système
+        run: >
+          dnf install -y --setopt=install_weak_deps=False
+          git tar zstd gcc gcc-c++ make pkgconf-pkg-config file
+          webkit2gtk4.1-devel openssl-devel librsvg2-devel systemd-devel
+          rpm-sign gnupg2
+          rust cargo clippy nodejs npm
+
+      # Numéro de build : celui du dépôt de développement, inscrit dans build-info par
+      # la publication ; à défaut (dépôt de développement), le nombre de commits.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Numéro de build
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          if [ -s build-info ]; then build=$(head -n1 build-info); else build=$(git rev-list --count HEAD); fi
+          printf '%s\n%s\n' "$build" "$(git rev-parse --short HEAD)" > build-info
+          cat build-info
+          echo "BUILD=$(head -n1 build-info)" >> "$GITHUB_ENV"
+
+      # Seuls les sources des crates et le build release sont mis en cache :
+      # le dossier target/debug faisait grossir le cache jusqu'à saturer le disque.
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/release
+          key: fedora44-cargo-v2-${{ hashFiles('Cargo.lock') }}
+          restore-keys: fedora44-cargo-v2-
+
+      # Compilation des tests et de clippy (target/debug) : sauvegardée une seule fois
+      # par couple Cargo.lock / version de Rust, sans clé de repli, pour qu'elle ne
+      # grossisse pas d'une exécution à l'autre (elle avait saturé le disque). Seul le
+      # code de Quayline est alors recompilé, pas les dépendances.
+      - name: Version de Rust
+        id: rust
+        run: echo "version=$(rustc -V | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache des tests
+        id: test-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: target/debug
+          key: fedora44-debug-v1-${{ steps.rust.outputs.version }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Dépendances npm
+        run: npm ci --no-audit --no-fund
+
+      - name: Tests Rust
+        run: cargo test --workspace --locked
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Vérification Svelte/TypeScript
+        run: npm run check
+
+      - name: Sauvegarde du cache des tests
+        if: steps.test-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: target/debug
+          key: ${{ steps.test-cache.outputs.cache-primary-key }}
+
+      - name: Libération de l'espace (artefacts de test)
+        run: rm -rf target/debug && df -h . | tail -1
+
+      # Numéro de release = numéro de build (nombre de commits) : chaque build de main
+      # est plus récent que le précédent, donc « dnf upgrade » fonctionne.
+      # Le cache restaure target/release : on retire les paquets des builds précédents
+      # pour que l'artifact ne contienne que le RPM de cette exécution.
+      - name: Construction du RPM
+        run: >
+          rm -rf target/release/bundle &&
+          npx tauri build --bundles rpm
+          --config '{"bundle":{"linux":{"rpm":{"release":"${{ env.BUILD }}"}}}}' -- --locked
+
+      # Signature si le secret PACKAGE_SIGNING_KEY est configuré (clé GPG privée,
+      # armurée, sans phrase de passe) : le RPM d'abord (rpmsign modifie le fichier),
+      # puis les empreintes, puis le fichier d'empreintes (SHA256SUMS.asc), vérifié par
+      # les scripts d'installation avec packaging/signing-key.asc.
+      - name: Signature et empreintes SHA-256
+        working-directory: target/release/bundle/rpm
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -n ${SIGNING_KEY:-} ]]; then
+            export GNUPGHOME=$(mktemp -d)
+            printf '%s\n' "$SIGNING_KEY" | gpg --batch --quiet --import
+            fpr=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ { print $10; exit }')
+            rpmsign --define "_gpg_name $fpr" --addsign ./*.rpm
+          else
+            echo "::warning::Secret PACKAGE_SIGNING_KEY absent : paquets non signés."
+          fi
+          sha256sum *.rpm | tee SHA256SUMS
+          if [[ -n ${SIGNING_KEY:-} ]]; then
+            gpg --batch --yes --local-user "$fpr" --armor --detach-sign SHA256SUMS
+            rm -rf "$GNUPGHOME"
+          fi
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: quayline-rpm-fc44
+          path: |
+            target/release/bundle/rpm/*.rpm
+            target/release/bundle/rpm/SHA256SUMS*
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publication de la release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: rpm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: quayline-rpm-fc44
+          path: dist
+
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: |
+            dist/*.rpm
+            dist/SHA256SUMS*
+          generate_release_notes: true

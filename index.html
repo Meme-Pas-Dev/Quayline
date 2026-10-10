@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>%APP_NAME%</title>
+    <!-- Fond appliqué avant le chargement de la feuille de style : évite un flash blanc. -->
+    <style>
+      html, body { background: #0d0f14; color-scheme: dark; }
+      @media (prefers-color-scheme: light) {
+        html, body { background: #f4f5f9; color-scheme: light; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,72 @@
+# Paquet Flatpak, compilé depuis les sources dans le SDK GNOME.
+#
+#   flatpak-builder --user --install --force-clean --install-deps-from=flathub \
+#       build-flatpak flatpak/manifest.yml
+#
+# La compilation télécharge les dépendances Rust et npm (--share=network) :
+# ce manifeste sert aux builds locaux et à la CI, pas à une soumission Flathub.
+id: dev.memepas.quayline
+runtime: org.gnome.Platform
+runtime-version: "50"
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node22
+command: quayline
+
+finish-args:
+  - --socket=wayland
+  # X11 en plus de Wayland : le presse-papiers (copier-coller du terminal, copie des
+  # mots de passe) passe par XWayland. La fenêtre, elle, reste en Wayland natif.
+  - --socket=x11
+  - --share=ipc
+  - --device=dri
+  # Connexions SSH/SFTP.
+  - --share=network
+  # Explorateur SFTP local (dossier personnel, corbeille).
+  - --filesystem=home
+  # Clés de sécurité FIDO2 (hidraw) : Flatpak n'a pas de permission plus fine.
+  - --device=all
+  # Déverrouillage Pocket ID : clé rangée dans KWallet / GNOME Keyring.
+  - --talk-name=org.freedesktop.secrets
+  # Verrouillage avec la session et à la mise en veille.
+  - --talk-name=org.freedesktop.ScreenSaver
+  - --system-talk-name=org.freedesktop.login1
+
+modules:
+  - name: quayline
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin
+      build-args:
+        - --share=network
+      env:
+        CARGO_HOME: /run/build/quayline/cargo-home
+        CARGO_PROFILE_RELEASE_DEBUG: "0"
+        CARGO_INCREMENTAL: "0"
+    build-commands:
+      - npm ci --no-audit --no-fund
+      - npx tauri build --no-bundle -- --locked
+      - install -Dm755 target/release/quayline /app/bin/quayline
+      - >
+        sed -e 's/{{name}}/Quayline/' -e 's/{{comment}}/Client SSH\/SFTP sécurisé/'
+        -e 's/{{exec}}/quayline/' -e 's/{{icon}}/dev.memepas.quayline/'
+        -e 's/^StartupWMClass=.*/StartupWMClass=dev.memepas.quayline/'
+        src-tauri/linux/app.desktop > dev.memepas.quayline.desktop
+      - install -Dm644 dev.memepas.quayline.desktop /app/share/applications/dev.memepas.quayline.desktop
+      - sh flatpak/metainfo.sh > metainfo.xml
+      - install -Dm644 metainfo.xml /app/share/metainfo/dev.memepas.quayline.metainfo.xml
+      - install -Dm644 src-tauri/icons/32x32.png /app/share/icons/hicolor/32x32/apps/dev.memepas.quayline.png
+      - install -Dm644 src-tauri/icons/64x64.png /app/share/icons/hicolor/64x64/apps/dev.memepas.quayline.png
+      - install -Dm644 src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/dev.memepas.quayline.png
+      - install -Dm644 src-tauri/icons/128x128@2x.png /app/share/icons/hicolor/256x256/apps/dev.memepas.quayline.png
+      - install -Dm644 src-tauri/icons/app-icon.svg /app/share/icons/hicolor/scalable/apps/dev.memepas.quayline.svg
+    sources:
+      - type: dir
+        path: ..
+        skip:
+          - target
+          - node_modules
+          - dist
+          - .flatpak-builder
+          - build-flatpak

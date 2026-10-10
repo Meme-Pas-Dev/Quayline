@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-oidc-enroll"
+description = "Enables the oidc_enroll command without any pre-configured scope."
+commands.allow = ["oidc_enroll"]
+
+[[permission]]
+identifier = "deny-oidc-enroll"
+description = "Denies the oidc_enroll command without any pre-configured scope."
+commands.deny = ["oidc_enroll"]

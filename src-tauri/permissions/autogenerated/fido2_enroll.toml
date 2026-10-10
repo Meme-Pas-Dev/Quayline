@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fido2-enroll"
+description = "Enables the fido2_enroll command without any pre-configured scope."
+commands.allow = ["fido2_enroll"]
+
+[[permission]]
+identifier = "deny-fido2-enroll"
+description = "Denies the fido2_enroll command without any pre-configured scope."
+commands.deny = ["fido2_enroll"]

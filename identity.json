@@ -1,0 +1,7 @@
+{
+  "name": "Quayline",
+  "slug": "quayline",
+  "id": "dev.memepas.quayline",
+  "description": "Client SSH/SFTP sécurisé",
+  "migrateFrom": []
+}

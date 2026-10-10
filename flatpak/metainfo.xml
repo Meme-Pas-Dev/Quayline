@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.memepas.quayline</id>
+  <name>Quayline</name>
+  <summary>Client SSH/SFTP sécurisé</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="dev.memepas">
+    <name>Meme-Pas-Dev</name>
+  </developer>
+  <description>
+    <p>
+      Client SSH et SFTP pour KDE Plasma et GNOME. Serveurs, identifiants et clés sont
+      conservés dans un coffre chiffré localement (Argon2id, XChaCha20-Poly1305), ouvert par
+      un mot de passe maître, une clé de sécurité FIDO2 ou un compte Pocket ID.
+    </p>
+  </description>
+  <launchable type="desktop-id">dev.memepas.quayline.desktop</launchable>
+  <url type="homepage">https://github.com/Meme-Pas-Dev/quayline</url>
+  <categories>
+    <category>Network</category>
+    <category>RemoteAccess</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

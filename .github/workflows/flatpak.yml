@@ -1,0 +1,118 @@
+name: Flatpak
+
+# Étiquettes de version : Flatpak de la release, construit uniquement dans le dépôt
+# public (minutes gratuites). Lancement manuel possible partout (onglet Actions →
+# Flatpak → Run workflow).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Le numéro de build (nombre de commits) est calculé hors du conteneur Flatpak,
+  # qui n'a pas forcément git.
+  build-info:
+    name: Numéro de build
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/quayline'
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.info.outputs.build }}
+      commit: ${{ steps.info.outputs.commit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: info
+        run: |
+          if [ -s build-info ]; then build=$(head -n1 build-info); else build=$(git rev-list --count HEAD); fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+  flatpak:
+    name: Paquet Flatpak (GNOME 50)
+    needs: build-info
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Numéro de build
+        run: printf '%s\n%s\n' "${{ needs.build-info.outputs.build }}" "${{ needs.build-info.outputs.commit }}" | tee build-info
+
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6
+        with:
+          manifest-path: flatpak/manifest.yml
+          bundle: quayline.flatpak
+          cache-key: flatpak-gnome50-${{ hashFiles('Cargo.lock', 'package-lock.json') }}
+          upload-artifact: false
+
+      # Même principe que pour le RPM : empreinte, signée si PACKAGE_SIGNING_KEY existe.
+      - name: Empreinte et signature
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          sha256sum quayline.flatpak | tee SHA256SUMS.flatpak
+          if [[ -n ${SIGNING_KEY:-} ]]; then
+            command -v gpg >/dev/null || dnf install -y --setopt=install_weak_deps=False gnupg2
+            export GNUPGHOME=$(mktemp -d)
+            printf '%s\n' "$SIGNING_KEY" | gpg --batch --quiet --import
+            fpr=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ { print $10; exit }')
+            gpg --batch --yes --local-user "$fpr" --armor --detach-sign SHA256SUMS.flatpak
+            rm -rf "$GNUPGHOME"
+          else
+            echo "::warning::Secret PACKAGE_SIGNING_KEY absent : paquet non signé."
+          fi
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: quayline-flatpak
+          path: |
+            quayline.flatpak
+            SHA256SUMS.flatpak*
+          retention-days: 30
+
+  # Sur une étiquette vX.Y.Z, le Flatpak est joint à la release créée par le
+  # workflow RPM (qui en est le seul créateur, pour éviter deux créations
+  # simultanées) : on attend qu'elle existe, au plus 40 minutes.
+  release:
+    name: Ajout à la release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: flatpak
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: quayline-flatpak
+          path: dist
+
+      - name: Ajout du Flatpak à la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          for i in $(seq 1 80); do
+            if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+              gh release upload "$TAG" --repo "$REPO" --clobber dist/quayline.flatpak dist/SHA256SUMS.flatpak*
+              exit 0
+            fi
+            echo "Release $TAG pas encore créée, nouvel essai dans 30 s…"
+            sleep 30
+          done
+          echo "La release $TAG n'a pas été créée par le workflow RPM." >&2
+          exit 1

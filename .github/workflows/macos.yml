@@ -1,0 +1,180 @@
+name: macOS
+
+# - Étiquettes de version : Quayline.app signée (Developer ID) et notarisée, publiée en
+#   .dmg dans la release ; uniquement dans le dépôt public (Meme-Pas-Dev/quayline, où les
+#   minutes sont gratuites) et si les secrets de signature existent.
+# - Lancement manuel (onglet Actions → macOS → Run workflow) : tests, clippy, puis
+#   l'application, signée si les secrets existent.
+# Voir docs/signature-macos.md.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  # Sur une machine Linux (minutes ×1) : les secrets ne sont pas lisibles dans un `if`.
+  check:
+    name: Secrets de signature
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/quayline'
+    runs-on: ubuntu-latest
+    outputs:
+      signing: ${{ steps.check.outputs.signing }}
+    steps:
+      - id: check
+        env:
+          CERT: ${{ secrets.APPLE_CERTIFICATE }}
+          KEY: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          if [ -n "$CERT" ] && [ -n "$KEY" ]; then
+            echo "signing=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signing=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Secrets de signature Apple absents : pas de build signé."
+          fi
+
+  macos:
+    name: Quayline.app (macOS)
+    needs: check
+    if: needs.check.outputs.signing == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      # Historique complet : build.rs calcule le numéro de build avec git.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+          rustc --version
+
+      - name: Cache Cargo
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target/release
+          key: macos-cargo-v1-${{ hashFiles('Cargo.lock') }}
+          restore-keys: macos-cargo-v1-
+
+      - name: Dépendances npm
+        run: npm ci --no-audit --no-fund
+
+      # Sur les étiquettes, les tests ont déjà tourné dans le workflow RPM (Linux).
+      - name: Tests Rust
+        if: github.event_name == 'workflow_dispatch'
+        run: cargo test --workspace --locked
+
+      - name: Clippy
+        if: github.event_name == 'workflow_dispatch'
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Vérification Svelte/TypeScript
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run check
+
+      # Tauri importe le certificat dans un trousseau temporaire, signe avec le
+      # runtime renforcé, notarise l'application auprès d'Apple et agrafe le ticket.
+      - name: Construction (signée et notarisée si les secrets existent)
+        env:
+          SIGNING: ${{ needs.check.outputs.signing }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          if [ "$SIGNING" = "true" ]; then
+            key_dir=$(mktemp -d)
+            printf '%s' "$APPLE_API_KEY_P8" > "$key_dir/AuthKey.p8"
+            export APPLE_API_KEY_PATH="$key_dir/AuthKey.p8"
+          else
+            unset APPLE_CERTIFICATE APPLE_SIGNING_IDENTITY APPLE_API_ISSUER APPLE_API_KEY
+          fi
+          # Le cache restaure target/release : on retire le bundle des builds précédents.
+          rm -rf target/release/bundle
+          npx tauri build --bundles app,dmg -- --locked
+          rm -rf "${key_dir:-/nonexistent}"
+
+      - name: Vérification de la signature
+        if: needs.check.outputs.signing == 'true'
+        working-directory: target/release/bundle/macos
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          codesign --verify --deep --strict --verbose=2 Quayline.app
+          codesign -dv --verbose=2 Quayline.app 2>&1 | grep -E '^(Authority|TeamIdentifier|Runtime)'
+          codesign -dv Quayline.app 2>&1 | grep -qx "TeamIdentifier=$TEAM_ID"
+          xcrun stapler validate Quayline.app
+          spctl -a -vv Quayline.app
+
+      - name: Empreintes
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          cp target/release/bundle/dmg/*.dmg out/
+          cd out
+          for f in *.dmg; do mv "$f" "Quayline-${GITHUB_REF_NAME#v}-macos-arm64.dmg"; done
+          shasum -a 256 *.dmg | tee SHA256SUMS.macos
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: quayline-macos
+          path: out/*
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publication dans la release
+    if: startsWith(github.ref, 'refs/tags/v') && needs.check.outputs.signing == 'true'
+    needs: [check, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: quayline-macos
+          path: dist
+
+      # La release est créée par le workflow RPM (seul créateur, pour éviter deux
+      # créations simultanées) : on attend qu'elle existe, au plus 40 minutes.
+      - name: Ajout du .dmg à la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          for i in $(seq 1 80); do
+            if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+              gh release upload "$TAG" --repo "$REPO" --clobber dist/*.dmg dist/SHA256SUMS.macos
+              exit 0
+            fi
+            echo "Release $TAG pas encore créée, nouvel essai dans 30 s…"
+            sleep 30
+          done
+          echo "La release $TAG n'a pas été créée par le workflow RPM." >&2
+          exit 1

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fido2-set-pin"
+description = "Enables the fido2_set_pin command without any pre-configured scope."
+commands.allow = ["fido2_set_pin"]
+
+[[permission]]
+identifier = "deny-fido2-set-pin"
+description = "Denies the fido2_set_pin command without any pre-configured scope."
+commands.deny = ["fido2_set_pin"]

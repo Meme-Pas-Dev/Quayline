@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-transfers-subscribe"
+description = "Enables the transfers_subscribe command without any pre-configured scope."
+commands.allow = ["transfers_subscribe"]
+
+[[permission]]
+identifier = "deny-transfers-subscribe"
+description = "Denies the transfers_subscribe command without any pre-configured scope."
+commands.deny = ["transfers_subscribe"]

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Quayline",
+  "mainBinaryName": "quayline",
+  "version": "1.4.1",
+  "identifier": "dev.memepas.quayline",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Quayline",
+        "width": 1240,
+        "height": 800,
+        "minWidth": 940,
+        "minHeight": 600,
+        "center": true,
+        "visible": false
+      }
+    ],
+    "security": {
+      "freezePrototype": false,
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data:",
+        "font-src": "'self'",
+        "connect-src": "ipc: http://ipc.localhost",
+        "object-src": "'none'",
+        "base-uri": "'none'",
+        "frame-src": "'none'",
+        "form-action": "'none'"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["rpm", "appimage"],
+    "category": "DeveloperTool",
+    "license": "GPL-3.0-or-later",
+    "licenseFile": "../LICENSE",
+    "shortDescription": "Client SSH/SFTP sécurisé",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png", "icons/icon.icns", "icons/icon.ico"],
+    "linux": {
+      "rpm": { "release": "1", "desktopTemplate": "linux/app.desktop" }
+    }
+  }
+}

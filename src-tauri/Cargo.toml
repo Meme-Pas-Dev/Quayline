@@ -1,0 +1,61 @@
+[package]
+name = "app"
+description = "Client SSH/SFTP sécurisé"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "app_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+serde_json = "1"
+
+[dependencies]
+vault = { path = "../crates/vault" }
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["time", "sync", "macros", "rt"] }
+russh = { version = "0.64", default-features = false, features = ["ring", "rsa"] }
+russh-sftp = "3"
+trash = "5"
+tauri-plugin-clipboard-manager = "2"
+# Choix du fichier d'export / d'import, ouvert depuis le backend uniquement.
+tauri-plugin-dialog = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+dirs = "6"
+ssh-key = { version = "0.6", features = ["ed25519", "encryption", "rand_core", "std"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+zeroize = "1"
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "json", "form", "http2"] }
+# Fournisseur crypto « ring » pour rustls (pas d'aws-lc : ni cmake ni C supplémentaire).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+jsonwebtoken = { version = "11", default-features = false, features = ["rust_crypto"] }
+open = "5"
+sha2 = "0.11.0"
+url = "2.5.8"
+base64 = "0.22"
+ctap-hid-fido2 = "3.6"
+arboard = { version = "3.6", default-features = false }
+# QR code de la connexion Pocket ID depuis un téléphone (matrice seule, sans image).
+qrcode = { version = "0.14", default-features = false }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+glib = "0.18"
+secret-service = { version = "5", default-features = false, features = ["rt-tokio-crypto-rust"] }
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+futures-util = { version = "0.3", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "NSDistributedNotificationCenter", "NSNotification", "NSOperation", "NSString"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace"] }
