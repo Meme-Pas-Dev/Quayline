@@ -20,7 +20,9 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     host: "127.0.0.1",
-    watch: { ignored: ["**/src-tauri/**", "**/crates/**"] },
+    // Ni le backend ni les dossiers de compilation : sous Windows, surveiller target/
+    // pendant que cargo y écrit échoue (EBUSY).
+    watch: { ignored: ["**/src-tauri/**", "**/crates/**", "**/target/**", "**/dist/**"] },
   },
   build: {
     target: "safari16",

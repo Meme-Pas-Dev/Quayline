@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Métadonnées AppStream (Discover, GNOME Logiciels, Flathub), en anglais avec la
+     traduction française. Gabarit : voir metainfo.sh. -->
+<component type="desktop-application">
+  <id>dev.memepas.quayline</id>
+  <name>Quayline</name>
+  <summary>Secure SSH/SFTP client</summary>
+  <summary xml:lang="fr">Client SSH/SFTP sécurisé</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="dev.memepas">
+    <name>Meme-Pas-Dev</name>
+  </developer>
+  <description>
+    <p>
+      A security-focused SSH and SFTP client for KDE Plasma and GNOME. Servers,
+      credentials and keys are kept in a locally encrypted vault (Argon2id,
+      XChaCha20-Poly1305), unlocked with a master password, a FIDO2 security key or an
+      OpenID Connect identity provider (Pocket ID, Authentik, Keycloak…).
+    </p>
+    <p xml:lang="fr">
+      Client SSH et SFTP pour KDE Plasma et GNOME, pensé pour la sécurité. Serveurs,
+      identifiants et clés sont conservés dans un coffre chiffré localement (Argon2id,
+      XChaCha20-Poly1305), ouvert par un mot de passe maître, une clé de sécurité FIDO2 ou
+      un fournisseur d'identité OpenID Connect (Pocket ID, Authentik, Keycloak…).
+    </p>
+    <p>
+      Tabbed SSH terminal, dual-pane SFTP browser, host key verification, automatic lock
+      and clipboard clearing. The interface is available in English and French.
+    </p>
+    <p xml:lang="fr">
+      Terminal SSH à onglets, explorateur SFTP en double panneau, vérification des clés
+      d'hôte, verrouillage automatique et effacement du presse-papiers. L'interface est en
+      anglais et en français.
+    </p>
+  </description>
+  <launchable type="desktop-id">@DESKTOP_ID@</launchable>
+  <url type="homepage">https://github.com/Meme-Pas-Dev/quayline</url>
+  <url type="bugtracker">https://github.com/Meme-Pas-Dev/quayline/issues</url>
+  <url type="vcs-browser">https://github.com/Meme-Pas-Dev/quayline</url>
+  <categories>
+    <category>Network</category>
+    <category>RemoteAccess</category>
+  </categories>
+  <keywords>
+    <keyword>ssh</keyword>
+    <keyword>sftp</keyword>
+    <keyword>terminal</keyword>
+  </keywords>
+  <languages>
+    <lang percentage="100">en</lang>
+    <lang percentage="100">fr</lang>
+  </languages>
+  <provides>
+    <binary>quayline</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

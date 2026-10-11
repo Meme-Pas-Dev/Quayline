@@ -754,5 +754,9 @@
   "update.downloading": "Downloading… {percent} %",
   "update.verifying": "Checking the signature…",
   "update.installed": "Version {version} installed",
-  "update.restart": "Restart"
+  "update.restart": "Restart",
+  "files.thisPc": "This PC",
+  "files.dragging.one": "{count} item",
+  "files.dragging.other": "{count} items",
+  "keys.windowsSoon": "Security keys are not available on Windows yet: use the master password or an identity provider."
 }

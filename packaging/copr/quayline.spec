@@ -43,10 +43,12 @@ npx tauri build --no-bundle -- --locked
 
 %install
 install -Dm755 target/release/%{name} %{buildroot}%{_bindir}/%{name}
-sed -e 's/{{name}}/Quayline/g' -e 's/{{comment}}/Client SSH\/SFTP sécurisé/' \
+sed -e 's/{{name}}/Quayline/g' -e 's/{{comment}}/Secure SSH\/SFTP client/' \
     -e 's/{{exec}}/%{name}/' -e 's/{{icon}}/%{name}/' \
     src-tauri/linux/app.desktop > Quayline.desktop
 desktop-file-install --dir=%{buildroot}%{_datadir}/applications Quayline.desktop
+sh packaging/linux/metainfo.sh Quayline.desktop > metainfo.xml
+install -Dm644 metainfo.xml %{buildroot}%{_metainfodir}/dev.memepas.quayline.metainfo.xml
 install -Dm644 src-tauri/icons/32x32.png %{buildroot}%{_datadir}/icons/hicolor/32x32/apps/%{name}.png
 install -Dm644 src-tauri/icons/128x128.png %{buildroot}%{_datadir}/icons/hicolor/128x128/apps/%{name}.png
 install -Dm644 src-tauri/icons/128x128@2x.png %{buildroot}%{_datadir}/icons/hicolor/256x256@2/apps/%{name}.png
@@ -56,6 +58,7 @@ install -Dm644 src-tauri/icons/icon.png %{buildroot}%{_datadir}/icons/hicolor/51
 %license LICENSE
 %{_bindir}/%{name}
 %{_datadir}/applications/Quayline.desktop
+%{_metainfodir}/dev.memepas.quayline.metainfo.xml
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog

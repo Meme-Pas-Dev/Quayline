@@ -4,6 +4,7 @@
   import { t, tn } from "../i18n/index.svelte";
   import { APP_NAME } from "../identity";
   import { providerName } from "../oidcProviders";
+  import { IS_WINDOWS } from "../platform";
   import Icon from "../components/Icon.svelte";
   import Logo from "../components/Logo.svelte";
   import PasswordInput from "../components/PasswordInput.svelte";
@@ -38,7 +39,8 @@
   onMount(() => {
     if (mode !== "unlock") return;
     api.oidcStatus().then((s) => (oidc = s)).catch(() => {});
-    api.fido2List().then((k) => (hasSecurityKey = k.length > 0)).catch(() => {});
+    // Clés de sécurité pas encore prises en charge sous Windows.
+    if (!IS_WINDOWS) api.fido2List().then((k) => (hasSecurityKey = k.length > 0)).catch(() => {});
   });
 
   async function unlockWithSecurityKey() {

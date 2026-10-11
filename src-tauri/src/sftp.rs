@@ -311,12 +311,49 @@ fn local_permissions(_meta: &std::fs::Metadata) -> Option<String> {
     None
 }
 
+/// Chemin local affiché. Sous Windows, `canonicalize` renvoie la forme étendue
+/// (« \\?\C:\… », « \\?\UNC\serveur\… ») : forme usuelle, acceptée partout ailleurs.
+fn display_path(path: &Path) -> String {
+    let s = path.to_string_lossy();
+    if cfg!(windows) {
+        if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+            return format!(r"\\{rest}");
+        }
+        if let Some(rest) = s.strip_prefix(r"\\?\") {
+            return rest.to_owned();
+        }
+    }
+    s.into_owned()
+}
+
+/// Racine « Ce PC » sous Windows (chemin vide) : les lecteurs présents.
+fn local_drives() -> Vec<FileEntry> {
+    if !cfg!(windows) {
+        return Vec::new();
+    }
+    (b'A'..=b'Z')
+        .filter_map(|letter| {
+            let root = format!("{}:\\", letter as char);
+            std::fs::metadata(&root).ok().filter(std::fs::Metadata::is_dir)?;
+            Some(FileEntry {
+                name: format!("{}:", letter as char),
+                path: root,
+                kind: "dir",
+                is_dir: true,
+                size: 0,
+                modified: None,
+                permissions: None,
+            })
+        })
+        .collect()
+}
+
 fn local_entry(path: &Path, meta: &std::fs::Metadata, target_is_dir: bool) -> FileEntry {
     let ft = meta.file_type();
     let kind = if ft.is_dir() { "dir" } else if ft.is_symlink() { "link" } else { "file" };
     FileEntry {
         name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
-        path: path.to_string_lossy().into_owned(),
+        path: display_path(path),
         kind,
         is_dir: ft.is_dir() || (ft.is_symlink() && target_is_dir),
         size: meta.len(),
@@ -328,6 +365,9 @@ fn local_entry(path: &Path, meta: &std::fs::Metadata, target_is_dir: bool) -> Fi
 #[tauri::command]
 pub async fn local_list(path: String) -> CmdResult<Vec<FileEntry>> {
     tauri::async_runtime::spawn_blocking(move || {
+        if cfg!(windows) && path.is_empty() {
+            return Ok(local_drives());
+        }
         let dir = std::fs::canonicalize(&path).map_err(io_err)?;
         let mut entries = Vec::new();
         for entry in std::fs::read_dir(&dir).map_err(io_err)?.flatten() {
@@ -345,7 +385,10 @@ pub async fn local_list(path: String) -> CmdResult<Vec<FileEntry>> {
 
 #[tauri::command]
 pub fn local_realpath(path: String) -> CmdResult<String> {
-    std::fs::canonicalize(path).map(|p| p.to_string_lossy().into_owned()).map_err(io_err)
+    if cfg!(windows) && path.is_empty() {
+        return Ok(path);
+    }
+    std::fs::canonicalize(path).map(|p| display_path(&p)).map_err(io_err)
 }
 
 #[tauri::command]

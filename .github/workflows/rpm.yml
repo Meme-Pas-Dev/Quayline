@@ -108,11 +108,13 @@ jobs:
       # est plus récent que le précédent, donc « dnf upgrade » fonctionne.
       # Le cache restaure target/release : on retire les paquets des builds précédents
       # pour que l'artifact ne contienne que le RPM de cette exécution.
+      # Métadonnées AppStream (Discover, GNOME Logiciels) ajoutées au paquet.
       - name: Construction du RPM
         run: >
           rm -rf target/release/bundle &&
+          mkdir -p target && sh packaging/linux/metainfo.sh Quayline.desktop > target/metainfo.xml &&
           npx tauri build --bundles rpm
-          --config '{"bundle":{"linux":{"rpm":{"release":"${{ env.BUILD }}"}}}}' -- --locked
+          --config '{"bundle":{"linux":{"rpm":{"release":"${{ env.BUILD }}","files":{"/usr/share/metainfo/dev.memepas.quayline.metainfo.xml":"../target/metainfo.xml"}}}}}' -- --locked
 
       # Signature si le secret PACKAGE_SIGNING_KEY est configuré (clé GPG privée,
       # armurée, sans phrase de passe) : le RPM d'abord (rpmsign modifie le fichier),
@@ -156,6 +158,18 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            CHANGELOG.md
+            scripts/release-notes.sh
+          sparse-checkout-cone-mode: false
+
+      # Texte de la release : section de la version dans CHANGELOG.md.
+      - name: Notes de version
+        run: scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/notes.md"
+
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: quayline-rpm-fc44
@@ -166,4 +180,4 @@ jobs:
           files: |
             dist/*.rpm
             dist/SHA256SUMS*
-          generate_release_notes: true
+          body_path: ${{ runner.temp }}/notes.md

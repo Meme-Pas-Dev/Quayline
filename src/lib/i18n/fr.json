@@ -754,5 +754,9 @@
   "update.downloading": "Téléchargement… {percent} %",
   "update.verifying": "Vérification de la signature…",
   "update.installed": "Version {version} installée",
-  "update.restart": "Redémarrer"
+  "update.restart": "Redémarrer",
+  "files.thisPc": "Ce PC",
+  "files.dragging.one": "{count} élément",
+  "files.dragging.other": "{count} éléments",
+  "keys.windowsSoon": "Les clés de sécurité ne sont pas encore disponibles sous Windows : utilisez le mot de passe maître ou un fournisseur d'identité."
 }

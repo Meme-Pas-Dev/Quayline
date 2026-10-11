@@ -5,6 +5,9 @@
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import Icon, { type IconName } from "./Icon.svelte";
   import PromptDialog from "./PromptDialog.svelte";
+  import { IS_WINDOWS } from "../platform";
+  import { crumbsOf, parentOf as parentPath, type PathStyle } from "../paths";
+  import { DRAG_THRESHOLD, fileDrag } from "../fileDrag.svelte";
 
   export type Side = "local" | "remote";
 
@@ -47,7 +50,6 @@
     ondrop: (paths: string[], from: Side) => void;
   } = $props();
 
-  const DRAG_TYPE = "application/x-app-files";
 
   let showHidden = $state(false);
   let selected = $state<Set<string>>(new Set());
@@ -76,17 +78,10 @@
     return paneEl;
   }
 
-  function parentOf(p: string) {
-    if (p === "/" || p === "") return "/";
-    const trimmed = p.replace(/\/+$/, "");
-    const i = trimmed.lastIndexOf("/");
-    return i <= 0 ? "/" : trimmed.slice(0, i);
-  }
-
-  const crumbs = $derived.by(() => {
-    const parts = path.split("/").filter(Boolean);
-    return [{ label: "/", path: "/" }, ...parts.map((p, i) => ({ label: p, path: "/" + parts.slice(0, i + 1).join("/") }))];
-  });
+  // Fichiers locaux sous Windows : lecteurs et « \ » ; ailleurs, chemins Unix.
+  const style: PathStyle = $derived(side === "local" && IS_WINDOWS ? "windows" : "unix");
+  const parentOf = (p: string) => parentPath(p, style);
+  const crumbs = $derived(crumbsOf(path, style, t("files.thisPc")));
 
   function select(entry: FileEntry, e: MouseEvent) {
     const next = new Set(e.ctrlKey || e.metaKey ? selected : []);
@@ -145,37 +140,46 @@
     }
   }
 
-  function ondragstart(entry: FileEntry, e: DragEvent) {
+  // ── Glisser vers l'autre panneau (voir fileDrag.svelte.ts) ──
+
+  // Appui sur une ligne : devient un glisser au-delà de quelques pixels.
+  let pressed: { entry: FileEntry; x: number; y: number } | null = null;
+
+  function onrowpointerdown(entry: FileEntry, e: PointerEvent) {
+    if (e.button === 0 && !e.shiftKey && !e.ctrlKey && !e.metaKey) pressed = { entry, x: e.clientX, y: e.clientY };
+  }
+
+  function onwindowpointermove(e: PointerEvent) {
+    if (fileDrag.side === side) {
+      fileDrag.x = e.clientX;
+      fileDrag.y = e.clientY;
+      return;
+    }
+    if (!pressed || Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) < DRAG_THRESHOLD) return;
+    const { entry } = pressed;
+    pressed = null;
     if (!selected.has(entry.path)) {
       selected = new Set([entry.path]);
       anchor = entry.path;
     }
     const paths = visible.filter((x) => selected.has(x.path)).map((x) => x.path);
-    e.dataTransfer?.setData(DRAG_TYPE, JSON.stringify({ side, paths }));
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = "copy";
+    Object.assign(fileDrag, { side, paths, x: e.clientX, y: e.clientY });
   }
 
-  function acceptsDrag(e: DragEvent) {
-    return !!e.dataTransfer?.types.includes(DRAG_TYPE);
-  }
-
-  function ondragover(e: DragEvent) {
-    if (!acceptsDrag(e)) return;
-    e.preventDefault();
-    dropActive = true;
-  }
-
-  function ondropEvent(e: DragEvent) {
+  // Relâché : le panneau d'arrivée (gestionnaire sur le panneau, appelé avant celui de
+  // la fenêtre) lance le transfert ; le panneau d'origine termine le glisser.
+  function onpanepointerup() {
+    if (fileDrag.side && fileDrag.side !== side && fileDrag.paths.length) ondrop([...fileDrag.paths], fileDrag.side);
     dropActive = false;
-    const raw = e.dataTransfer?.getData(DRAG_TYPE);
-    if (!raw) return;
-    e.preventDefault();
-    try {
-      const { side: from, paths } = JSON.parse(raw) as { side: Side; paths: string[] };
-      if (from !== side && paths.length) ondrop(paths, from);
-    } catch {
-      /* contenu inattendu : ignoré */
-    }
+  }
+
+  function onwindowpointerup() {
+    pressed = null;
+    if (fileDrag.side === side) Object.assign(fileDrag, { side: null, paths: [] });
+  }
+
+  function onpanepointermove() {
+    if (fileDrag.side && fileDrag.side !== side) dropActive = true;
   }
 
   /** Surbrillance pendant un glisser-déposer depuis le gestionnaire de fichiers du bureau. */
@@ -196,7 +200,19 @@
   }
 </script>
 
-<svelte:window onclick={() => (menu = null)} />
+<svelte:window
+  onclick={() => (menu = null)}
+  onpointermove={onwindowpointermove}
+  onpointerup={onwindowpointerup}
+  onblur={onwindowpointerup}
+/>
+
+{#if fileDrag.side === side}
+  <div class="drag-ghost" style:left="{fileDrag.x + 14}px" style:top="{fileDrag.y + 10}px">
+    <Icon name="file" size={14} />
+    {tn("files.dragging", fileDrag.paths.length)}
+  </div>
+{/if}
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -208,9 +224,9 @@
   role="region"
   aria-label={title}
   {onkeydown}
-  {ondragover}
-  ondragleave={() => (dropActive = false)}
-  ondrop={ondropEvent}
+  onpointermove={onpanepointermove}
+  onpointerleave={() => (dropActive = false)}
+  onpointerup={onpanepointerup}
 >
   <header>
     <div class="title">
@@ -260,7 +276,7 @@
         }}
       >
         {#each crumbs as c, i}
-          {#if i > 1}<span class="sep">/</span>{/if}
+          {#if style === "windows" ? i > 0 : i > 1}<span class="sep">{style === "windows" ? (i === 1 ? "›" : "\\") : "/"}</span>{/if}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <span
@@ -305,11 +321,10 @@
           class:hidden-file={entry.name.startsWith(".")}
           role="row"
           tabindex="-1"
-          draggable="true"
           onclick={(e) => select(entry, e)}
           ondblclick={() => open(entry)}
           oncontextmenu={(e) => onrowcontext(entry, e)}
-          ondragstart={(e) => ondragstart(entry, e)}
+          onpointerdown={(e) => onrowpointerdown(entry, e)}
         >
           <span class="name">
             <span class="ficon" class:dir={entry.isDir}><Icon name={iconFor(entry)} size={16} /></span>
@@ -397,6 +412,23 @@
 {/if}
 
 <style>
+  .drag-ghost {
+    position: fixed;
+    z-index: 100;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    font-size: 12.5px;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .row {
+    user-select: none;
+  }
   .pane {
     position: relative;
     display: flex;

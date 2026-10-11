@@ -49,12 +49,12 @@ modules:
       - npx tauri build --no-bundle -- --locked
       - install -Dm755 target/release/quayline /app/bin/quayline
       - >
-        sed -e 's/{{name}}/Quayline/' -e 's/{{comment}}/Client SSH\/SFTP sécurisé/'
+        sed -e 's/{{name}}/Quayline/' -e 's/{{comment}}/Secure SSH\/SFTP client/'
         -e 's/{{exec}}/quayline/' -e 's/{{icon}}/dev.memepas.quayline/'
         -e 's/^StartupWMClass=.*/StartupWMClass=dev.memepas.quayline/'
         src-tauri/linux/app.desktop > dev.memepas.quayline.desktop
       - install -Dm644 dev.memepas.quayline.desktop /app/share/applications/dev.memepas.quayline.desktop
-      - sh flatpak/metainfo.sh > metainfo.xml
+      - sh packaging/linux/metainfo.sh dev.memepas.quayline.desktop > metainfo.xml
       - install -Dm644 metainfo.xml /app/share/metainfo/dev.memepas.quayline.metainfo.xml
       - install -Dm644 src-tauri/icons/32x32.png /app/share/icons/hicolor/32x32/apps/dev.memepas.quayline.png
       - install -Dm644 src-tauri/icons/64x64.png /app/share/icons/hicolor/64x64/apps/dev.memepas.quayline.png

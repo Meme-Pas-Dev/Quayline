@@ -2,7 +2,7 @@
   "name": "Quayline",
   "slug": "quayline",
   "id": "dev.memepas.quayline",
-  "description": "Client SSH/SFTP sécurisé",
+  "description": "Secure SSH/SFTP client",
   "repository": "Meme-Pas-Dev/quayline",
   "migrateFrom": []
 }

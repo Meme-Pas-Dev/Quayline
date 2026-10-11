@@ -53,6 +53,12 @@ impl SecretClipboard {
             use arboard::SetExtLinux;
             set.exclude_from_history()
         };
+        // Ni l'historique Win+V, ni la synchronisation entre appareils.
+        #[cfg(windows)]
+        let set = {
+            use arboard::SetExtWindows;
+            set.exclude_from_history().exclude_from_cloud()
+        };
         set.text(secret.to_owned()).map_err(|e| e.to_string())?;
         inner.copied = Some(digest(secret));
         inner.generation += 1;

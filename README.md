@@ -4,8 +4,8 @@
 
 ## English
 
-A security-focused SSH and SFTP client for Linux (Fedora, KDE Plasma and GNOME) and
-macOS. Servers, credentials and keys are kept in an encrypted vault, on your machine
+A security-focused SSH and SFTP client for Linux (Fedora, KDE Plasma and GNOME),
+macOS and Windows 11 (preview). Servers, credentials and keys are kept in an encrypted vault, on your machine
 only.
 
 The interface is available in English and French (Settings → Appearance → Language).
@@ -84,6 +84,22 @@ Download `Quayline-X.Y.Z-macos-arm64.dmg` from the
 Applications. The app is signed (Developer ID) and notarized by Apple. The vault is
 stored in `~/Library/Application Support/dev.memepas.quayline/`.
 
+#### Windows 11 (preview)
+
+Download `Quayline-X.Y.Z-windows-x64-setup.exe` from the
+[releases](https://github.com/Meme-Pas-Dev/quayline/releases) and run it. The installer
+offers to install for the current user only (no administrator account needed) or for
+all users. It is not signed yet: Windows SmartScreen shows “Windows protected your PC”
+(“More info” → “Run anyway”). You can check it against `SHA256SUMS.windows`, signed
+with the project key (`SHA256SUMS.windows.asc`):
+
+```powershell
+Get-FileHash .\Quayline-*-windows-x64-setup.exe   # compare with SHA256SUMS.windows
+```
+
+Security keys (FIDO2) are not available on Windows yet; the master password and
+identity providers are. The vault is stored in `%APPDATA%\dev.memepas.quayline\`.
+
 ### Usage
 
 - **Identity provider unlock**: Settings → Identity provider (OIDC). The instructions
@@ -136,8 +152,8 @@ must be released under the same license, with its source code.
 
 ## Français
 
-Client SSH et SFTP pour Linux (Fedora, KDE Plasma et GNOME) et macOS, pensé pour la
-sécurité. Serveurs, identifiants et clés sont rangés dans un coffre chiffré, sur votre
+Client SSH et SFTP pour Linux (Fedora, KDE Plasma et GNOME), macOS et Windows 11
+(préversion), pensé pour la sécurité. Serveurs, identifiants et clés sont rangés dans un coffre chiffré, sur votre
 machine uniquement.
 
 L'interface est en français et en anglais (Réglages → Apparence → Langue).
@@ -214,6 +230,24 @@ Télécharger `Quayline-X.Y.Z-macos-arm64.dmg` dans les [releases](https://githu
 glisser Quayline dans Applications. L'application est signée (Developer ID) et
 notarisée par Apple. Le coffre est rangé dans
 `~/Library/Application Support/dev.memepas.quayline/`.
+
+#### Windows 11 (préversion)
+
+Télécharger `Quayline-X.Y.Z-windows-x64-setup.exe` dans les
+[releases](https://github.com/Meme-Pas-Dev/quayline/releases) et le lancer.
+L'installateur propose d'installer pour l'utilisateur actif seulement (sans compte
+administrateur) ou pour tous les utilisateurs. Il n'est pas encore signé : Windows
+SmartScreen affiche « Windows a protégé votre ordinateur » (« Informations
+complémentaires » → « Exécuter quand même »). Il se vérifie avec `SHA256SUMS.windows`,
+signé avec la clé du projet (`SHA256SUMS.windows.asc`) :
+
+```powershell
+Get-FileHash .\Quayline-*-windows-x64-setup.exe   # à comparer avec SHA256SUMS.windows
+```
+
+Les clés de sécurité (FIDO2) ne sont pas encore disponibles sous Windows ; le mot de
+passe maître et les fournisseurs d'identité le sont. Le coffre est rangé dans
+`%APPDATA%\dev.memepas.quayline\`.
 
 ### Utilisation
 

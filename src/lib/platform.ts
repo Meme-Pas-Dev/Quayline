@@ -2,6 +2,7 @@ import { t } from "./i18n/index.svelte";
 // Plateforme, détectée dans la WebView (WKWebView sur macOS) : synchrone, donc
 // utilisable directement dans les gestionnaires de touches.
 export const IS_MAC = /Macintosh|Mac OS X/.test(navigator.userAgent);
+export const IS_WINDOWS = /Windows/.test(navigator.userAgent);
 
 // Raccourcis de l'application : Cmd sur macOS, Ctrl+Maj ailleurs, pour que Ctrl+C,
 // Ctrl+L, etc. restent transmis au serveur.

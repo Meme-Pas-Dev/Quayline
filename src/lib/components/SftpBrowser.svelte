@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { IS_WINDOWS } from "../platform";
+  import { baseName } from "../paths";
   import { t, tn } from "../i18n/index.svelte";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { onMount, untrack } from "svelte";
@@ -109,7 +111,9 @@
     if (!ready || !paths.length) return;
     const dest = direction === "upload" ? remote : local;
     const existing = new Set(dest.entries.map((e) => e.name));
-    const names = paths.map((p) => p.replace(/\/+$/, "").split("/").pop() ?? p).filter((n) => existing.has(n));
+    // Envoi : chemins locaux (style Windows sous Windows) ; réception : chemins du serveur.
+    const style = direction === "upload" && IS_WINDOWS ? "windows" : "unix";
+    const names = paths.map((p) => baseName(p, style)).filter((n) => existing.has(n));
     if (names.length) conflict = { direction, paths, names, destination: dest.path };
     else start(direction, paths, dest.path, false);
   }

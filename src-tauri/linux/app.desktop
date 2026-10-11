@@ -1,12 +1,15 @@
 [Desktop Entry]
 Type=Application
 Name={{name}}
-GenericName=Client SSH/SFTP
+GenericName=SSH/SFTP client
+GenericName[fr]=Client SSH/SFTP
 Comment={{comment}}
+Comment[fr]=Client SSH/SFTP sécurisé
 Exec={{exec}}
 Icon={{icon}}
 Terminal=false
 Categories=Network;RemoteAccess;
-Keywords=ssh;sftp;terminal;remote;serveur;
+Keywords=ssh;sftp;terminal;remote;server;
+Keywords[fr]=ssh;sftp;terminal;distant;serveur;
 StartupWMClass={{name}}
 StartupNotify=true

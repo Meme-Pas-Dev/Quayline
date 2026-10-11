@@ -261,14 +261,16 @@ impl Drop for TempDir {
     }
 }
 
+/// Dossier réservé à l'utilisateur (0700 sous Unix ; sous Windows, les ACL du dossier
+/// temporaire de l'utilisateur s'appliquent).
 fn create_private_dir(path: &std::path::Path) -> std::io::Result<()> {
-    let mut builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
     {
         use std::os::unix::fs::DirBuilderExt;
-        builder.mode(0o700);
+        std::fs::DirBuilder::new().mode(0o700).create(path)
     }
-    builder.create(path)
+    #[cfg(not(unix))]
+    std::fs::create_dir(path)
 }
 
 fn hex(bytes: &[u8]) -> String {
