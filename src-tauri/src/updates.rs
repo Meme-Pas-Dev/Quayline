@@ -337,15 +337,44 @@ async fn download_file(
 
 /// Lance un outil du système (chemin absolu) et renvoie sa sortie, ou une erreur.
 fn run(program: &str, args: &[&std::ffi::OsStr]) -> CmdResult<String> {
-    let out = std::process::Command::new(program)
+    run_with_input(program, args, b"")
+}
+
+/// Comme [`run`], avec `input` envoyé sur l'entrée standard.
+fn run_with_input(program: &str, args: &[&std::ffi::OsStr], input: &[u8]) -> CmdResult<String> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    let err = |e: std::io::Error| update_err(tr!("err.update.install", detail = e));
+    let mut child = Command::new(program)
         .args(args)
-        .output()
-        .map_err(|e| update_err(tr!("err.update.install", detail = e)))?;
+        // hdiutil affiche la licence avec un « pager » : sans attente de touche.
+        .env("PAGER", "cat")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(err)?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(input);
+    }
+    let out = child.wait_with_output().map_err(err)?;
     let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     if out.status.success() {
         Ok(text)
     } else {
-        Err(update_err(tr!("err.update.install", detail = format!("{program}: {}", text.trim()))))
+        Err(update_err(tr!("err.update.install", detail = format!("{program}: {}", error_summary(&text)))))
+    }
+}
+
+/// Fin de la sortie d'un outil en échec (dernières lignes, 300 caractères au plus) :
+/// le message d'erreur y figure, pas le reste (une licence, par exemple).
+fn error_summary(output: &str) -> String {
+    let lines: Vec<&str> = output.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    let tail = lines[lines.len().saturating_sub(3)..].join(" ");
+    match tail.char_indices().rev().nth(299) {
+        Some((i, _)) => format!("…{}", &tail[i..]),
+        None => tail,
     }
 }
 
@@ -362,9 +391,12 @@ fn stage(dmg: &std::path::Path, dir: &std::path::Path, bundle: &std::path::Path)
 
     let mount = dir.join("mnt");
     create_private_dir(&mount).map_err(|e| update_err(tr!("err.update.install", detail = e)))?;
-    run(
+    // Le .dmg affiche la licence (GPL) à l'ouverture et demande de l'accepter : réponse
+    // « Y » envoyée sur l'entrée standard, comme un clic sur « Accepter » dans le Finder.
+    run_with_input(
         "/usr/bin/hdiutil",
         &["attach".as_ref(), "-nobrowse".as_ref(), "-readonly".as_ref(), "-noautoopen".as_ref(), "-mountpoint".as_ref(), mount.as_os_str(), dmg.as_os_str()],
+        b"Y\n",
     )?;
     let staged = parent.join(format!(".{app_name}.update"));
     let _ = std::fs::remove_dir_all(&staged);
@@ -442,6 +474,14 @@ mod tests {
         assert!(parse_version("v1.6").is_none());
         assert!(parse_version("v1.6.0.1").is_none());
         assert!(parse_version("1.10.0") > parse_version("1.9.9"));
+    }
+
+    #[test]
+    fn error_summaries() {
+        assert_eq!(error_summary("licence\n\nligne 2\nAgree Y/N?\nhdiutil: attach failed\n"), "ligne 2 Agree Y/N? hdiutil: attach failed");
+        let long = "x".repeat(1000);
+        let summary = error_summary(&long);
+        assert!(summary.starts_with('…') && summary.chars().count() == 301);
     }
 
     #[test]

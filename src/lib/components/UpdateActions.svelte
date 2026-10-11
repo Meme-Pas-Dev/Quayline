@@ -21,14 +21,14 @@
 
 {#if update.available}
   {#if update.install?.step === "installed"}
-    <span class="state">{t("update.installed", { version: update.available.version })}</span>
-    <div class="actions">
+    <span class="state" class:compact>{t("update.installed", { version: update.available.version })}</span>
+    <div class="actions" class:compact>
       <button class="btn primary" onclick={restartAfterUpdate}>{t("update.restart")}</button>
     </div>
   {:else if update.install}
-    <span class="state faint">{update.install.step === "download" ? t("update.downloading", { percent }) : t("update.verifying")}</span>
+    <span class="state faint" class:compact>{update.install.step === "download" ? t("update.downloading", { percent }) : t("update.verifying")}</span>
   {:else}
-    <div class="actions">
+    <div class="actions" class:compact>
       {#if update.available.installable}
         <button class="btn primary" onclick={() => (confirming = true)}>{t("update.install")}</button>
         <button class="btn" onclick={openRelease}>{t("update.view")}</button>
@@ -57,13 +57,24 @@
     flex-wrap: wrap;
     gap: 6px;
   }
+  /* Encart de la barre latérale : boutons centrés. */
+  .actions.compact {
+    justify-content: center;
+  }
+  .state.compact {
+    text-align: center;
+  }
   .state {
     font-size: 12.5px;
   }
   .faint {
     color: var(--text-faint);
   }
+  /* Message d'erreur de l'encart : hauteur limitée, défilement au-delà. */
   .error-text {
     font-size: 12px;
+    max-height: 7.5em;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
   }
 </style>

@@ -6,6 +6,22 @@ used as the text of its GitHub release.
 Chaque version est décrite en anglais, puis en français. La section d'une version sert
 de texte à sa release GitHub.
 
+## [1.7.1] - 2026-10-11
+
+### English
+
+**Fixed**
+- macOS: installing an update from the application failed, because the `.dmg` asks to
+  accept the license when opened.
+- Update notice: centered buttons, shorter error messages.
+
+### Français
+
+**Corrigé**
+- macOS : l'installation d'une mise à jour depuis l'application échouait, le `.dmg`
+  demandant d'accepter la licence à l'ouverture.
+- Encart de mise à jour : boutons centrés, messages d'erreur raccourcis.
+
 ## [1.7.0] - 2026-10-11
 
 ### English
