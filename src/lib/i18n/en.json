@@ -758,5 +758,11 @@
   "files.thisPc": "This PC",
   "files.dragging.one": "{count} item",
   "files.dragging.other": "{count} items",
-  "keys.windowsSoon": "Security keys are not available on Windows yet: use the master password or an identity provider."
+  "err.fido2.windowsUnavailable": "Security keys need a more recent version of Windows (WebAuthn API 3 or later).",
+  "err.fido2.windowsPin": "On Windows, the key's PIN is managed by Windows (Settings → Accounts → Sign-in options → Security key).",
+  "wizard.windowsReady": "Windows will guide you",
+  "wizard.windowsReadyHint": "Plug in your key. Windows will show its window twice (creating the key's identifier, then the vault secret): each time, choose “Security key”, enter the PIN and touch the key.",
+  "wizard.windowsTouch": "Windows window {step} of 2: choose “Security key”, enter the PIN, then touch the key.",
+  "lock.windowsKey": "Follow the Windows window",
+  "lock.windowsKeyHint": "Choose your key, enter its PIN and touch it."
 }

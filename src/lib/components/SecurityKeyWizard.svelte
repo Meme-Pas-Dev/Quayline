@@ -93,7 +93,9 @@
     }
   }
 
-  const canEnroll = $derived(!busy && label.trim().length > 0 && pin.length > 0 && password.length > 0);
+  // Windows : la clé est jointe par la fenêtre du système (PIN, toucher), pas ici.
+  const viaWindows = $derived(device?.state === "windows");
+  const canEnroll = $derived(!busy && label.trim().length > 0 && (pin.length > 0 || viaWindows) && password.length > 0);
 
   async function enroll(e: SubmitEvent) {
     e.preventDefault();
@@ -150,6 +152,11 @@
           <Icon name="alert" size={20} />
           <div><strong>{t("wizard.multiple")}</strong><span>{t("wizard.multipleHint")}</span></div>
         </div>
+      {:else if device.state === "windows"}
+        <div class="status ok">
+          <Icon name="key" size={20} />
+          <div><strong>{t("wizard.windowsReady")}</strong><span>{t("wizard.windowsReadyHint")}</span></div>
+        </div>
       {:else if device.state === "unsupported"}
         <div class="status bad">
           <Icon name="alert" size={20} />
@@ -205,6 +212,7 @@
         <input class="input" bind:value={label} maxlength="60" spellcheck="false" />
         <small>{t("wizard.keyNameHint")}</small>
       </label>
+      {#if !viaWindows}
       <label class="field">
         <span>{t("wizard.keyPin")}</span>
         <PasswordInput bind:value={pin} autofocus={!pin} />
@@ -213,9 +221,10 @@
           {#if device?.pinRetries}{t("wizard.retriesBefore", { count: device.pinRetries })}{/if}
         </small>
       </label>
+      {/if}
       <label class="field">
         <span>{t("lock.masterPassword")}</span>
-        <PasswordInput bind:value={password} autofocus={!!pin} />
+        <PasswordInput bind:value={password} autofocus={!!pin || viaWindows} />
         <small>{t("wizard.passwordHint")}</small>
       </label>
       {#if error}<p class="error-text" role="alert">{error}</p>{/if}
@@ -229,7 +238,7 @@
           <span>{t("wizard.checkingPin")}</span>
         {:else}
           <strong>{t("wizard.touchKey", { step: touch })}</strong>
-          <span>{t(touch === 1 ? "wizard.touch1" : "wizard.touch2")}</span>
+          <span>{viaWindows ? t("wizard.windowsTouch", { step: touch }) : t(touch === 1 ? "wizard.touch1" : "wizard.touch2")}</span>
         {/if}
       </div>
       <ol class="touches">
@@ -259,7 +268,7 @@
       {#if device?.state === "ready" && !device.hasPin}
         <button class="btn primary" onclick={() => goTo("create-pin")}>{t("wizard.createPin")}</button>
       {:else}
-        <button class="btn primary" disabled={device?.state !== "ready"} onclick={() => goTo("details")}>{t("wizard.continue")}</button>
+        <button class="btn primary" disabled={device?.state !== "ready" && !viaWindows} onclick={() => goTo("details")}>{t("wizard.continue")}</button>
       {/if}
     {:else if step === "create-pin"}
       <button class="btn" onclick={() => goTo("detect")} disabled={busy}>{t("wizard.back")}</button>

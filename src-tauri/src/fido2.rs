@@ -6,7 +6,13 @@
 //! de l'utilisateur) et un toucher : sans la clé ET son PIN, le slot ne s'ouvre pas.
 //! Rien n'est conservé dans le trousseau système.
 //!
-//! La clé est jointe directement en USB (hidraw), sans passer par le navigateur.
+//! La clé est jointe directement en USB (hidraw), sans passer par le navigateur ; sous
+//! Windows, par l'API WebAuthn du système (voir `fido2_windows.rs`), qui affiche sa
+//! propre fenêtre pour le PIN et le toucher.
+
+#[cfg(windows)]
+#[path = "fido2_windows.rs"]
+mod webauthn;
 
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::{mpsc, OnceLock};
@@ -64,6 +70,8 @@ fn ctap_err(e: impl std::fmt::Display) -> CmdError {
 }
 
 /// Comme `ctap_err`, en précisant le nombre d'essais restants après un PIN incorrect.
+// Accès direct à la clé (Linux, macOS) ; Windows passe par WebAuthn.
+#[cfg_attr(windows, allow(dead_code))]
 fn ctap_err_with_retries(device: &FidoKeyHid, e: impl std::fmt::Display) -> CmdError {
     let mut err = ctap_err(e);
     if err.code == "fido2_pin" {
@@ -88,6 +96,8 @@ fn open_device() -> CmdResult<FidoKeyHid> {
 }
 
 /// Vérifie que la clé sait faire `hmac-secret` et qu'un code PIN y est défini.
+// Accès direct à la clé (Linux, macOS) ; Windows passe par WebAuthn.
+#[cfg_attr(windows, allow(dead_code))]
 fn check_capabilities(device: &FidoKeyHid) -> CmdResult<()> {
     let info = device.get_info().map_err(ctap_err)?;
     if !info.extensions.iter().any(|e| e == "hmac-secret") {
@@ -106,6 +116,8 @@ fn random<const N: usize>() -> [u8; N] {
 }
 
 /// Demande à la clé le secret `hmac-secret` de `binding` (PIN + toucher).
+// Accès direct à la clé (Linux, macOS) ; Windows passe par WebAuthn.
+#[cfg_attr(windows, allow(dead_code))]
 fn derive_secret(device: &FidoKeyHid, binding: &Fido2Binding, pin: &str) -> CmdResult<Zeroizing<[u8; 32]>> {
     let salt: [u8; 32] = binding.salt.as_slice().try_into().map_err(|_| fido_err(tr!("err.fido2.badSalt")))?;
     let challenge = random::<32>();
@@ -131,6 +143,8 @@ fn derive_secret(device: &FidoKeyHid, binding: &Fido2Binding, pin: &str) -> CmdR
 }
 
 /// La clé branchée détient-elle cet identifiant ? Sans PIN ni toucher.
+// Accès direct à la clé (Linux, macOS) ; Windows passe par WebAuthn.
+#[cfg_attr(windows, allow(dead_code))]
 fn holds_credential(device: &FidoKeyHid, binding: &Fido2Binding) -> bool {
     let challenge = random::<32>();
     let args = GetAssertionArgsBuilder::new(&binding.rp_id, &challenge)
@@ -150,6 +164,8 @@ pub struct EnrollProgress {
 
 /// Enregistre la clé branchée : création de l'identifiant puis calcul du secret.
 /// Deux touchers sont demandés.
+// Accès direct à la clé (Linux, macOS) ; Windows passe par WebAuthn.
+#[cfg_attr(windows, allow(dead_code))]
 fn enroll(
     label: String,
     pin: &str,
@@ -232,6 +248,28 @@ async fn run_blocking<T: Send + 'static>(f: impl FnOnce() -> CmdResult<T> + Send
     rx.await.map_err(|_| interrupted())?
 }
 
+/// Fenêtre principale, parente de la fenêtre de Windows (PIN, toucher).
+#[cfg(windows)]
+fn main_hwnd(app: &AppHandle) -> isize {
+    app.get_webview_window("main").and_then(|w| w.hwnd().ok()).map_or(0, |h| h.0 as isize)
+}
+
+/// Enregistrement sous Windows : identifiant créé, puis secret calculé, chacun par la
+/// fenêtre de Windows (PIN et toucher).
+#[cfg(windows)]
+fn enroll_windows(hwnd: isize, label: String, existing: &[Vec<u8>], progress: &Channel<EnrollProgress>) -> CmdResult<(Fido2Binding, Zeroizing<[u8; 32]>)> {
+    if !webauthn::available() {
+        return Err(fido_err(tr!("err.fido2.windowsUnavailable")));
+    }
+    let rp_id = identity::ID.to_string();
+    let _ = progress.send(EnrollProgress { touch: 1 });
+    let credential_id = webauthn::make_credential(hwnd, &rp_id, existing)?;
+    let binding = Fido2Binding { label, rp_id, credential_id, salt: random::<32>().to_vec() };
+    let _ = progress.send(EnrollProgress { touch: 2 });
+    let (_, secret) = webauthn::derive_secret(hwnd, &[(Uuid::nil(), binding.clone())])?;
+    Ok((binding, secret))
+}
+
 /// Ajoute une clé de sécurité (mot de passe maître exigé).
 #[tauri::command]
 pub async fn fido2_enroll(
@@ -245,7 +283,8 @@ pub async fn fido2_enroll(
     if label.is_empty() || label.chars().count() > MAX_LABEL || label.chars().any(char::is_control) {
         return Err(CmdError::invalid(tr!("err.fido2.labelRequired", max = MAX_LABEL)));
     }
-    if pin.is_empty() {
+    // Sous Windows, le PIN est demandé par la fenêtre du système.
+    if pin.is_empty() && !cfg!(windows) {
         return Err(CmdError::new("fido2_pin", tr!("err.fido2.enterPin")));
     }
 
@@ -255,6 +294,13 @@ pub async fn fido2_enroll(
         .with_vault(|v| Ok(v.fido2_keys().into_iter().map(|(_, b)| b.credential_id.clone()).collect::<Vec<_>>()))?;
 
     let label_for_view = label.clone();
+    #[cfg(windows)]
+    let (binding, secret) = {
+        let _ = pin;
+        let hwnd = main_hwnd(&app);
+        run_blocking(move || enroll_windows(hwnd, label, &existing, &progress)).await?
+    };
+    #[cfg(not(windows))]
     let (binding, secret) = run_blocking(move || enroll(label, pin.expose(), &existing, &progress)).await?;
     let id = app.state::<AppState>().with_vault_mut_nosave(|v| v.add_fido2(binding, &secret).map_err(Into::into))?;
     Ok(Fido2KeyView { id, label: label_for_view })
@@ -283,7 +329,11 @@ impl Fido2Device {
 #[tauri::command]
 pub async fn fido2_detect(state: State<'_, AppState>) -> CmdResult<Fido2Device> {
     state.with_vault(|_| Ok(()))?;
-    run_blocking(|| {
+    // Windows : pas d'accès direct à la clé ; tout passe par la fenêtre du système.
+    #[cfg(windows)]
+    let detected = Ok(Fido2Device::empty(if webauthn::available() { "windows" } else { "unsupported" }));
+    #[cfg(not(windows))]
+    let detected = run_blocking(|| {
         let mut devices = get_fidokey_devices();
         match devices.len() {
             0 => return Ok(Fido2Device::empty("none")),
@@ -304,13 +354,17 @@ pub async fn fido2_detect(state: State<'_, AppState>) -> CmdResult<Fido2Device> 
             pin_retries: if has_pin { device.get_pin_retries().ok() } else { None },
         })
     })
-    .await
+    .await;
+    detected
 }
 
 /// Définit le code PIN d'une clé qui n'en a pas encore.
 #[tauri::command]
 pub async fn fido2_set_pin(state: State<'_, AppState>, pin: Secret) -> CmdResult<()> {
     state.with_vault(|_| Ok(()))?;
+    if cfg!(windows) {
+        return Err(fido_err(tr!("err.fido2.windowsPin")));
+    }
     let chars = pin.expose().chars().count();
     if chars < MIN_PIN || pin.expose().len() > MAX_PIN_BYTES {
         return Err(CmdError::new("fido2_pin", tr!("err.fido2.pinLength", min = MIN_PIN)));
@@ -345,10 +399,33 @@ pub fn fido2_remove(state: State<'_, AppState>, id: Uuid) -> CmdResult<()> {
 pub async fn fido2_unlock(app: AppHandle, pin: Secret) -> CmdResult<()> {
     let state = app.state::<AppState>();
     let _guard = state.begin_unlock()?;
+    let path = state.vault_path.clone();
+    #[cfg(windows)]
+    let vault = {
+        let _ = pin;
+        let hwnd = main_hwnd(&app);
+        run_blocking(move || {
+            if !webauthn::available() {
+                return Err(fido_err(tr!("err.fido2.windowsUnavailable")));
+            }
+            let bindings = Vault::fido2_bindings(&path)?;
+            if bindings.is_empty() {
+                return Err(fido_err(tr!("err.fido2.noneRegistered")));
+            }
+            // Champs pas encore authentifiés : s'ils ont été modifiés, le slot refusera.
+            let (id, secret) = webauthn::derive_secret(hwnd, &bindings)?;
+            Vault::unlock_with_fido2(path, id, &secret).map_err(|e| match e {
+                vault::Error::InvalidCredentials => fido_err(tr!("err.fido2.mismatch")),
+                other => other.into(),
+            })
+        })
+        .await?
+    };
+    #[cfg(not(windows))]
     if pin.is_empty() {
         return Err(CmdError::new("fido2_pin", tr!("err.fido2.enterPin")));
     }
-    let path = state.vault_path.clone();
+    #[cfg(not(windows))]
     let vault = run_blocking(move || {
         let bindings = Vault::fido2_bindings(&path)?;
         if bindings.is_empty() {

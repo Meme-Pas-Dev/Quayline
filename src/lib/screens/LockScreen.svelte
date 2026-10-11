@@ -39,12 +39,12 @@
   onMount(() => {
     if (mode !== "unlock") return;
     api.oidcStatus().then((s) => (oidc = s)).catch(() => {});
-    // Clés de sécurité pas encore prises en charge sous Windows.
-    if (!IS_WINDOWS) api.fido2List().then((k) => (hasSecurityKey = k.length > 0)).catch(() => {});
+    api.fido2List().then((k) => (hasSecurityKey = k.length > 0)).catch(() => {});
   });
 
   async function unlockWithSecurityKey() {
-    if (busy || oidcWaiting || keyWaiting || !keyPin) return;
+    // Sous Windows, le code PIN est demandé par la fenêtre du système.
+    if (busy || oidcWaiting || keyWaiting || (!keyPin && !IS_WINDOWS)) return;
     keyWaiting = true;
     error = "";
     try {
@@ -219,10 +219,24 @@
 
       {#if hasSecurityKey}
         {#if !keyOpen}
-          <button type="button" class="btn lg alt" onclick={() => (keyOpen = true)} disabled={busy || oidcWaiting || !!device}>
+          <button
+            type="button"
+            class="btn lg alt"
+            onclick={() => (IS_WINDOWS ? unlockWithSecurityKey() : (keyOpen = true))}
+            disabled={busy || oidcWaiting || keyWaiting || !!device}
+          >
             <Icon name="key" size={17} />
             {t("lock.useSecurityKey")}
           </button>
+          {#if IS_WINDOWS && keyWaiting}
+            <div class="oidc-wait">
+              <span class="spinner dark"></span>
+              <div>
+                <strong>{t("lock.windowsKey")}</strong>
+                <span>{t("lock.windowsKeyHint")}</span>
+              </div>
+            </div>
+          {/if}
         {:else}
           <div class="key-panel">
             <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

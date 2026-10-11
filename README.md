@@ -97,8 +97,8 @@ with the project key (`SHA256SUMS.windows.asc`):
 Get-FileHash .\Quayline-*-windows-x64-setup.exe   # compare with SHA256SUMS.windows
 ```
 
-Security keys (FIDO2) are not available on Windows yet; the master password and
-identity providers are. The vault is stored in `%APPDATA%\dev.memepas.quayline\`.
+Security keys (FIDO2) go through Windows' own window (key choice, PIN, touch). The
+vault is stored in `%APPDATA%\dev.memepas.quayline\`.
 
 ### Usage
 
@@ -141,6 +141,24 @@ src/            Interface (Svelte, TypeScript)
 
 Translations live in `src/lib/i18n/en.json` and `fr.json`, shared by the interface and
 the backend; `npm run check` verifies that both catalogs match.
+
+### Code signing policy
+
+Windows installers are built by GitHub Actions from this repository, at each version
+tag; nothing is built or signed on a personal computer. Windows installers are not
+code-signed yet (free signing from the SignPath Foundation is planned); their
+checksums are signed with the project GPG key.
+
+- Committers and reviewers: members of the
+  [Meme-Pas-Dev](https://github.com/Meme-Pas-Dev) organization.
+- Approvers: the owner of the Meme-Pas-Dev organization, who approves each release.
+- Every release is built from a tag of this repository; macOS builds are signed with an
+  Apple Developer ID, Linux packages and Windows checksums with the project GPG key
+  ([packaging/signing-key.asc](packaging/signing-key.asc)).
+
+**Privacy**: Quayline sends no telemetry. It only connects to the servers and identity
+provider you configure and, if you allow it (asked once), to GitHub to check for a new
+version; on macOS, an update is downloaded from GitHub only after your consent.
 
 ### License
 
@@ -245,9 +263,8 @@ signé avec la clé du projet (`SHA256SUMS.windows.asc`) :
 Get-FileHash .\Quayline-*-windows-x64-setup.exe   # à comparer avec SHA256SUMS.windows
 ```
 
-Les clés de sécurité (FIDO2) ne sont pas encore disponibles sous Windows ; le mot de
-passe maître et les fournisseurs d'identité le sont. Le coffre est rangé dans
-`%APPDATA%\dev.memepas.quayline\`.
+Les clés de sécurité (FIDO2) passent par la fenêtre de Windows (choix de la clé, code
+PIN, toucher). Le coffre est rangé dans `%APPDATA%\dev.memepas.quayline\`.
 
 ### Utilisation
 
@@ -292,6 +309,27 @@ src/            Interface (Svelte, TypeScript)
 
 Les traductions sont dans `src/lib/i18n/en.json` et `fr.json`, communes à l'interface et
 au backend ; `npm run check` vérifie que les deux catalogues concordent.
+
+### Politique de signature du code
+
+Les installateurs Windows sont construits par GitHub Actions à partir de ce dépôt, à
+chaque étiquette de version ; rien n'est construit ni signé sur un ordinateur
+personnel. Les installateurs Windows ne sont pas encore signés (une signature gratuite
+par la SignPath Foundation est prévue) ; leurs empreintes sont signées avec la clé GPG
+du projet.
+
+- Contributeurs et relecteurs : membres de l'organisation
+  [Meme-Pas-Dev](https://github.com/Meme-Pas-Dev).
+- Approbateurs : le propriétaire de l'organisation Meme-Pas-Dev, qui approuve chaque
+  version.
+- Chaque version est construite depuis une étiquette de ce dépôt ; l'application macOS
+  est signée avec un Developer ID Apple, les paquets Linux et les empreintes Windows
+  avec la clé GPG du projet ([packaging/signing-key.asc](packaging/signing-key.asc)).
+
+**Vie privée** : Quayline n'envoie aucune télémétrie. Il ne se connecte qu'aux serveurs
+et au fournisseur d'identité que vous configurez et, si vous l'autorisez (question
+posée une fois), à GitHub pour rechercher une nouvelle version ; sur macOS, une mise à
+jour n'est téléchargée depuis GitHub qu'après votre accord.
 
 ### Licence
 

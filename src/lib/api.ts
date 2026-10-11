@@ -134,7 +134,7 @@ export interface Fido2Key {
 }
 
 export interface Fido2Device {
-  state: "none" | "multiple" | "unsupported" | "ready";
+  state: "none" | "multiple" | "unsupported" | "ready" | "windows";
   product: string | null;
   hasPin: boolean;
   minPinLength: number;

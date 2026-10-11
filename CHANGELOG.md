@@ -6,6 +6,22 @@ used as the text of its GitHub release.
 Chaque version est décrite en anglais, puis en français. La section d'une version sert
 de texte à sa release GitHub.
 
+## [1.8.0] - 2026-10-11
+
+### English
+
+**Added**
+- Windows: security keys (FIDO2), through Windows' own window for the PIN and the
+  touch. A key registered on Linux or macOS also opens the vault on Windows, and the
+  other way round.
+
+### Français
+
+**Ajouté**
+- Windows : clés de sécurité (FIDO2), par la fenêtre de Windows pour le code PIN et le
+  toucher. Une clé enregistrée sous Linux ou macOS ouvre aussi le coffre sous Windows,
+  et inversement.
+
 ## [1.7.1] - 2026-10-11
 
 ### English

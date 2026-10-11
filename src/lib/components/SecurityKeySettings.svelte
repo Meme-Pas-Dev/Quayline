@@ -8,7 +8,6 @@
   import Icon from "./Icon.svelte";
   import SecurityKeyWizard from "./SecurityKeyWizard.svelte";
   import { toast } from "./toast.svelte";
-  import { IS_WINDOWS } from "../platform";
 
   let keys = $state<Fido2Key[]>([]);
   let loaded = $state(false);
@@ -66,17 +65,11 @@
     </ul>
   {/if}
 
-  <!-- Windows : l'accès direct aux clés demande des droits administrateur ; il faudra
-       passer par l'API WebAuthn de Windows (voir docs/portage-windows.md). -->
-  {#if IS_WINDOWS}
-    <p class="hint">{t("keys.windowsSoon")}</p>
-  {:else}
-    <div class="actions">
-      <button class="btn" class:primary={!keys.length} onclick={() => (adding = true)} disabled={!loaded}>
-        <Icon name="plus" size={16} /> {t("keys.add")}
-      </button>
-    </div>
-  {/if}
+  <div class="actions">
+    <button class="btn" class:primary={!keys.length} onclick={() => (adding = true)} disabled={!loaded}>
+      <Icon name="plus" size={16} /> {t("keys.add")}
+    </button>
+  </div>
 </section>
 
 {#if adding}
