@@ -8,6 +8,10 @@
   import PageHeader from "../components/PageHeader.svelte";
   import { toast } from "../components/toast.svelte";
   import { data, handleError, identityName, openSession, reload } from "../store.svelte";
+  import { display } from "../display.svelte";
+
+  // Affichage des tuiles (Réglages → Général).
+  const compact = $derived(display.tiles === "compact");
 
   let query = $state("");
   let editing = $state<Host | null | undefined>(undefined); // undefined = fermé, null = création
@@ -167,30 +171,28 @@
             role="group"
             aria-label={h.label}
             class:menu-open={menu?.host.id === h.id}
+            class:compact
             style:--host-color={h.color ?? "var(--accent)"}
             oncontextmenu={(e) => onContextMenu(e, h)}
           >
             <div class="body">
+              <!-- Compact : l'adresse passe dans l'info-bulle, les badges sous le nom. -->
               <button
                 class="main"
                 onclick={() => connect(h)}
-                title={t(h.kind === "sftp" ? "hosts.openSftpTitle" : "hosts.openSshTitle")}
+                title={(compact ? `${userAt(h)} · ` : "") + t(h.kind === "sftp" ? "hosts.openSftpTitle" : "hosts.openSshTitle")}
               >
                 <div class="avatar"><Icon name={h.kind === "sftp" ? "folder" : "terminal"} size={18} /></div>
                 <div class="info">
                   <strong>{h.label}</strong>
-                  <span class="mono" title={userAt(h)}>{userAt(h)}</span>
+                  {#if compact}
+                    <div class="meta inline">{@render badges(h)}</div>
+                  {:else}
+                    <span class="mono" title={userAt(h)}>{userAt(h)}</span>
+                  {/if}
                 </div>
               </button>
-              <div class="meta">
-                <span class="badge kind">{h.kind === "sftp" ? "SFTP" : "SSH"}</span>
-                {#if identityName(h.identityId)}
-                  <span class="badge" title={identityName(h.identityId)}>
-                    <Icon name="key" size={11} /><span class="text">{identityName(h.identityId)}</span>
-                  </span>
-                {/if}
-                {#each h.tags.slice(0, 3) as tag}<span class="badge" title={tag}><span class="text">{tag}</span></span>{/each}
-              </div>
+              {#if !compact}<div class="meta">{@render badges(h)}</div>{/if}
             </div>
             <button
               class="btn ghost icon menu-btn"
@@ -208,6 +210,16 @@
     </section>
   {/each}
 </div>
+
+{#snippet badges(h: Host)}
+  <span class="badge kind">{h.kind === "sftp" ? "SFTP" : "SSH"}</span>
+  {#if identityName(h.identityId)}
+    <span class="badge" title={identityName(h.identityId)}>
+      <Icon name="key" size={11} /><span class="text">{identityName(h.identityId)}</span>
+    </span>
+  {/if}
+  {#each h.tags.slice(0, 3) as tag}<span class="badge" title={tag}><span class="text">{tag}</span></span>{/each}
+{/snippet}
 
 {#if menu}
   {@const h = menu.host}
@@ -390,6 +402,19 @@
   .text {
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  /* Compact : badges sur la ligne de l'adresse, tuile d'environ 73 px au lieu de 104. */
+  .compact .main {
+    flex: 1;
+    padding: 12px 44px 12px 16px;
+  }
+  .compact .info {
+    gap: 5px;
+  }
+  .meta.inline {
+    padding: 0;
+    min-height: 0;
+    overflow: hidden;
   }
   .menu-btn {
     position: absolute;

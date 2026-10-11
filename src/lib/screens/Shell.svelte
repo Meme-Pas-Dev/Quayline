@@ -425,6 +425,15 @@
     gap: 6px;
     font-weight: 600;
   }
+  /* Bouton secondaire (« Voir ») : fond et bordure marqués sur le fond bleuté de l'encart. */
+  .update-note :global(.btn:not(.primary):not(.ghost)) {
+    background: var(--surface);
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+  .update-note :global(.btn:not(.primary):not(.ghost):hover) {
+    background: var(--surface-hover);
+  }
   .update-note :global(.btn) {
     height: 28px;
     padding: 0 10px;

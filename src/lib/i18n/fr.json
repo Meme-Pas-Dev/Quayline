@@ -764,5 +764,14 @@
   "wizard.windowsReadyHint": "Branchez votre clé. Windows affichera sa fenêtre deux fois (création de l'identifiant, puis secret du coffre) : à chaque fois, choisissez « Clé de sécurité », saisissez le code PIN et touchez la clé.",
   "wizard.windowsTouch": "Fenêtre de Windows {step} sur 2 : choisissez « Clé de sécurité », saisissez le code PIN, puis touchez la clé.",
   "lock.windowsKey": "Suivez la fenêtre de Windows",
-  "lock.windowsKeyHint": "Choisissez votre clé, saisissez son code PIN et touchez-la."
+  "lock.windowsKeyHint": "Choisissez votre clé, saisissez son code PIN et touchez-la.",
+  "settings.tab.general": "Général",
+  "settings.tab.security": "Sécurité",
+  "settings.tab.terminal": "Terminal",
+  "settings.tab.data": "Données",
+  "settings.tab.about": "À propos",
+  "settings.appearance.tiles": "Affichage des tuiles",
+  "settings.appearance.tilesHint": "« Compact » masque l'adresse des hôtes (affichée au survol).",
+  "settings.appearance.tilesStandard": "Standard",
+  "settings.appearance.tilesCompact": "Compact"
 }

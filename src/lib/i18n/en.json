@@ -764,5 +764,14 @@
   "wizard.windowsReadyHint": "Plug in your key. Windows will show its window twice (creating the key's identifier, then the vault secret): each time, choose “Security key”, enter the PIN and touch the key.",
   "wizard.windowsTouch": "Windows window {step} of 2: choose “Security key”, enter the PIN, then touch the key.",
   "lock.windowsKey": "Follow the Windows window",
-  "lock.windowsKeyHint": "Choose your key, enter its PIN and touch it."
+  "lock.windowsKeyHint": "Choose your key, enter its PIN and touch it.",
+  "settings.tab.general": "General",
+  "settings.tab.security": "Security",
+  "settings.tab.terminal": "Terminal",
+  "settings.tab.data": "Data",
+  "settings.tab.about": "About",
+  "settings.appearance.tiles": "Host tiles",
+  "settings.appearance.tilesHint": "“Compact” hides the host address (shown on hover).",
+  "settings.appearance.tilesStandard": "Standard",
+  "settings.appearance.tilesCompact": "Compact"
 }

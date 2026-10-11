@@ -16,6 +16,8 @@
   import { providerName } from "../oidcProviders";
   import { IS_MAC } from "../platform";
   import { checkForUpdate, update } from "../updates.svelte";
+  import { display, setTileDensity, type TileDensity } from "../display.svelte";
+  import { APP_NAME } from "../identity";
   import UpdateActions from "../components/UpdateActions.svelte";
   import { formatList, intlLocale, languagePreference, setLanguagePreference, t, tn, type LanguagePreference, type MessageKey } from "../i18n/index.svelte";
 
@@ -32,6 +34,38 @@
   let changing = $state(false);
 
   let appearance = $state<ThemePreference>(themePreference());
+
+  /** Largeur du contenu des réglages (px), centré dans la fenêtre. */
+  const CONTENT_WIDTH = 760;
+
+  // Onglets par thème ; le dernier ouvert est retenu (stockage local de la fenêtre).
+  type Tab = "general" | "security" | "terminal" | "data" | "about";
+  const TABS: [Tab, MessageKey][] = [
+    ["general", "settings.tab.general"],
+    ["security", "settings.tab.security"],
+    ["terminal", "settings.tab.terminal"],
+    ["data", "settings.tab.data"],
+    ["about", "settings.tab.about"],
+  ];
+  const TAB_KEY = "quayline.settings.tab";
+  function readTab(): Tab {
+    try {
+      const v = localStorage.getItem(TAB_KEY);
+      if (TABS.some(([id]) => id === v)) return v as Tab;
+    } catch {
+      // Stockage indisponible : premier onglet.
+    }
+    return "general";
+  }
+  let tab = $state<Tab>(readTab());
+  function selectTab(id: Tab) {
+    tab = id;
+    try {
+      localStorage.setItem(TAB_KEY, id);
+    } catch {
+      // Non mémorisé.
+    }
+  }
   let languageChoice = $state<LanguagePreference>(languagePreference());
 
   // Noms propres (Dracula, Nord…) gardés tels quels ; « Nuit » et « Jour » traduits.
@@ -126,9 +160,16 @@
   }
 </script>
 
-<PageHeader title={t("settings.title")} />
+<PageHeader title={t("settings.title")} width={CONTENT_WIDTH} />
 
-<div class="page">
+<div class="page" style:--content-width="{CONTENT_WIDTH}px">
+  <div class="tabs" role="tablist" aria-label={t("settings.title")}>
+    {#each TABS as [id, label]}
+      <button role="tab" class="tab" class:active={tab === id} aria-selected={tab === id} onclick={() => selectTab(id)}>{t(label)}</button>
+    {/each}
+  </div>
+
+  {#if tab === "general"}
   <section class="card">
     <h2><Icon name="contrast" size={17} /> {t("settings.appearance.title")}</h2>
     <div class="setting">
@@ -155,9 +196,51 @@
         <option value="dark">{t("settings.appearance.dark")}</option>
       </select>
     </div>
+    <div class="setting">
+      <div>
+        <strong>{t("settings.appearance.tiles")}</strong>
+        <p>{t("settings.appearance.tilesHint")}</p>
+      </div>
+      <select class="input" value={display.tiles} onchange={(e) => setTileDensity(e.currentTarget.value as TileDensity)}>
+        <option value="standard">{t("settings.appearance.tilesStandard")}</option>
+        <option value="compact">{t("settings.appearance.tilesCompact")}</option>
+      </select>
+    </div>
   </section>
 
-  {#if settings}
+  <section class="card">
+    <h2><Icon name="refresh" size={17} /> {t("update.title")}</h2>
+    {#if settings}
+      <div class="setting">
+        <div>
+          <strong>{t("update.auto")}</strong>
+          <p>{t("update.autoHint")}</p>
+        </div>
+        <select class="input" bind:value={settings.check_updates} onchange={save}>
+          <option value={true}>{t("common.enabled")}</option>
+          <option value={false}>{t("common.disabled")}</option>
+        </select>
+      </div>
+    {/if}
+    <div class="update-row">
+      <button class="btn" onclick={checkForUpdate} disabled={update.checking || !!update.install}>
+        <Icon name="refresh" size={15} /> {t(update.checking ? "update.checking" : "update.check")}
+      </button>
+      {#if update.available}
+        <span>{update.available.published
+            ? t("update.availableLong", { version: update.available.version, date: releaseDate(update.available.published) })
+            : t("update.availableShort", { version: update.available.version })}</span>
+        <UpdateActions />
+      {/if}
+      {#if update.error}
+        <span class="error-text">{update.error}</span>
+      {:else if !update.available && update.checkedAt}
+        <span class="faint">{t("update.upToDate", { app: APP_NAME })}</span>
+      {/if}
+    </div>
+  </section>
+  {:else if tab === "security"}
+    {#if settings}
     <section class="card">
       <h2><Icon name="shield" size={17} /> {t("settings.security.title")}</h2>
       <div class="setting">
@@ -204,53 +287,9 @@
         </select>
       </div>
     </section>
+    {/if}
 
     <section class="card">
-      <h2><Icon name="terminal" size={17} /> {t("settings.terminal.title")}</h2>
-      <div class="setting">
-        <div>
-          <strong>{t("settings.terminal.theme")}</strong>
-          <p>{t("settings.terminal.themeHint")}</p>
-        </div>
-        <select class="input" bind:value={settings.terminal_theme} onchange={save}>
-          {#each THEMES as [id, name]}<option value={id}>{themeLabel(name)}</option>{/each}
-        </select>
-      </div>
-      <div class="setting">
-        <div>
-          <strong>{t("settings.terminal.fontSize")}</strong>
-          <p>{t("settings.terminal.fontSizeHint")}</p>
-        </div>
-        <input class="input" type="number" min="8" max="32" bind:value={settings.terminal_font_size} onchange={save} />
-      </div>
-    </section>
-  {/if}
-
-  {#key methodsVersion}
-    <SecurityKeySettings />
-    <OidcSettings />
-  {/key}
-
-  <section class="card">
-    <h2><Icon name="server" size={17} /> {t("settings.knownHosts.title")}</h2>
-    <p class="hint">{t("settings.knownHosts.hint")}</p>
-    {#if knownHosts.length === 0}
-      <p class="hint">{t("settings.knownHosts.empty")}</p>
-    {/if}
-    {#each knownHosts as k (k.hostname + ":" + k.port)}
-      <div class="known">
-        <div>
-          <strong>{k.hostname}{k.port !== 22 ? `:${k.port}` : ""}</strong>
-          <span class="mono">{k.algorithm} · {k.fingerprint}</span>
-        </div>
-        <button class="btn ghost icon" onclick={() => (forgetting = k)} title={t("settings.knownHosts.forget")}><Icon name="trash" size={16} /></button>
-      </div>
-    {/each}
-  </section>
-
-  <BackupSettings knownHostsCount={knownHosts.length} onimported={refreshAfterImport} />
-
-  <section class="card">
     <h2><Icon name="lock" size={17} /> {t("settings.master.title")}</h2>
     <form class="pw" onsubmit={changePassword}>
       <label class="field">
@@ -281,6 +320,52 @@
     </form>
   </section>
 
+    {#key methodsVersion}
+    <SecurityKeySettings />
+    <OidcSettings />
+  {/key}
+  {:else if tab === "terminal"}
+    {#if settings}
+    <section class="card">
+      <h2><Icon name="terminal" size={17} /> {t("settings.terminal.title")}</h2>
+      <div class="setting">
+        <div>
+          <strong>{t("settings.terminal.theme")}</strong>
+          <p>{t("settings.terminal.themeHint")}</p>
+        </div>
+        <select class="input" bind:value={settings.terminal_theme} onchange={save}>
+          {#each THEMES as [id, name]}<option value={id}>{themeLabel(name)}</option>{/each}
+        </select>
+      </div>
+      <div class="setting">
+        <div>
+          <strong>{t("settings.terminal.fontSize")}</strong>
+          <p>{t("settings.terminal.fontSizeHint")}</p>
+        </div>
+        <input class="input" type="number" min="8" max="32" bind:value={settings.terminal_font_size} onchange={save} />
+      </div>
+    </section>
+    {/if}
+  {:else if tab === "data"}
+  <section class="card">
+    <h2><Icon name="server" size={17} /> {t("settings.knownHosts.title")}</h2>
+    <p class="hint">{t("settings.knownHosts.hint")}</p>
+    {#if knownHosts.length === 0}
+      <p class="hint">{t("settings.knownHosts.empty")}</p>
+    {/if}
+    {#each knownHosts as k (k.hostname + ":" + k.port)}
+      <div class="known">
+        <div>
+          <strong>{k.hostname}{k.port !== 22 ? `:${k.port}` : ""}</strong>
+          <span class="mono">{k.algorithm} · {k.fingerprint}</span>
+        </div>
+        <button class="btn ghost icon" onclick={() => (forgetting = k)} title={t("settings.knownHosts.forget")}><Icon name="trash" size={16} /></button>
+      </div>
+    {/each}
+  </section>
+
+  <BackupSettings knownHostsCount={knownHosts.length} onimported={refreshAfterImport} />
+  {:else}
   {#if about}
     <section class="card about">
       <h2><Icon name="sparkles" size={17} /> {t("settings.about.title")}</h2>
@@ -290,35 +375,8 @@
         {#if about.flatpak}<span class="badge">Flatpak</span>{/if}
       </p>
       {#if about.commit}<p class="faint">{t("settings.about.commit")} <code>{about.commit}</code></p>{/if}
-      {#if settings}
-        <div class="setting">
-          <div>
-            <strong>{t("update.auto")}</strong>
-            <p>{t("update.autoHint")}</p>
-          </div>
-          <select class="input" bind:value={settings.check_updates} onchange={save}>
-            <option value={true}>{t("common.enabled")}</option>
-            <option value={false}>{t("common.disabled")}</option>
-          </select>
-        </div>
-      {/if}
-      <div class="update-row">
-        <button class="btn" onclick={checkForUpdate} disabled={update.checking || !!update.install}>
-          <Icon name="refresh" size={15} /> {t(update.checking ? "update.checking" : "update.check")}
-        </button>
-        {#if update.available}
-          <span>{update.available.published
-              ? t("update.availableLong", { version: update.available.version, date: releaseDate(update.available.published) })
-              : t("update.availableShort", { version: update.available.version })}</span>
-          <UpdateActions />
-        {/if}
-        {#if update.error}
-          <span class="error-text">{update.error}</span>
-        {:else if !update.available && update.checkedAt}
-          <span class="faint">{t("update.upToDate", { app: about.name })}</span>
-        {/if}
-      </div>
     </section>
+  {/if}
   {/if}
 </div>
 
@@ -333,6 +391,35 @@
 {/if}
 
 <style>
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 9px 14px;
+    margin-bottom: -1px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13.5px;
+    white-space: nowrap;
+  }
+  .tab:hover {
+    color: var(--text);
+  }
+  .tab.active {
+    color: var(--text);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .tab:focus-visible {
+    outline: none;
+    box-shadow: var(--ring);
+    border-radius: 6px 6px 0 0;
+  }
   .hint {
     color: var(--text-muted);
     font-size: 12.5px;
@@ -382,12 +469,12 @@
     font-family: var(--font-mono);
     user-select: text;
   }
+  /* Contenu de largeur limitée (lisibilité), centré : marges égales des deux côtés. */
   .page {
-    padding: 4px 32px 32px;
+    padding: 4px max(32px, calc((100% - var(--content-width)) / 2)) 32px;
     display: flex;
     flex-direction: column;
     gap: 16px;
-    max-width: 760px;
   }
   .card {
     padding: 20px 22px;

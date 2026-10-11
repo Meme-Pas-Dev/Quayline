@@ -6,6 +6,29 @@ used as the text of its GitHub release.
 Chaque version est décrite en anglais, puis en français. La section d'une version sert
 de texte à sa release GitHub.
 
+## [1.8.1] - 2026-10-11
+
+### English
+
+**Changed**
+- Settings split into tabs: General, Security, Terminal, Data, About. The last tab
+  opened is remembered.
+- Host tiles: new “Compact” display (Settings → General), without the address (shown
+  on hover) and with the badges under the name. “Standard” stays the default.
+- Update notice: better contrast for the “View” button.
+- Settings page centered in the window, with equal margins on both sides.
+
+### Français
+
+**Modifié**
+- Réglages répartis en onglets : Général, Sécurité, Terminal, Données, À propos. Le
+  dernier onglet ouvert est retenu.
+- Tuiles des hôtes : nouvel affichage « Compact » (Réglages → Général), sans l'adresse
+  (affichée au survol) et avec les badges sous le nom. « Standard » reste l'affichage
+  par défaut.
+- Encart de mise à jour : bouton « Voir » mieux contrasté.
+- Page des réglages centrée dans la fenêtre, avec des marges égales des deux côtés.
+
 ## [1.8.0] - 2026-10-11
 
 ### English
