@@ -61,6 +61,12 @@ impl AppState {
         self.lock_inner().vault.is_some()
     }
 
+    /// Garde des commandes d'action (saisie dans un terminal, transferts, fichiers
+    /// locaux) : refusées coffre verrouillé, même si l'interface les envoyait.
+    pub fn require_unlocked(&self) -> CmdResult<()> {
+        if self.is_unlocked() { Ok(()) } else { Err(CmdError::locked()) }
+    }
+
     pub fn set_vault(&self, vault: Vault) {
         let mut inner = self.lock_inner();
         inner.vault = Some(vault);

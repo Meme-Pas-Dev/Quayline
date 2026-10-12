@@ -773,5 +773,8 @@
   "settings.appearance.tiles": "Affichage des tuiles",
   "settings.appearance.tilesHint": "« Compact » masque l'adresse des hôtes (affichée au survol).",
   "settings.appearance.tilesStandard": "Standard",
-  "settings.appearance.tilesCompact": "Compact"
+  "settings.appearance.tilesCompact": "Compact",
+  "err.vault.inUse": "Le coffre est déjà ouvert dans une autre fenêtre de l'application. Fermez-la, puis réessayez.",
+  "err.vault.modifiedElsewhere": "Le coffre a été modifié par une autre copie de l'application depuis son déverrouillage : cette modification n'a pas été enregistrée. Verrouillez puis déverrouillez pour le recharger.",
+  "err.identity.tooManyRounds": "Cette clé demande trop de calcul pour être déchiffrée (plus de {max} tours bcrypt). Rechiffrez-la avec moins de tours (ssh-keygen -p -a 100)."
 }

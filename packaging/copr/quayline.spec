@@ -11,7 +11,7 @@ Version:        @VERSION@
 Release:        @BUILD@%{?dist}
 Summary:        Secure SSH/SFTP client with an encrypted vault
 License:        GPL-3.0-or-later
-URL:            https://github.com/Meme-Pas-Dev/quayline
+URL:            https://github.com/Meme-Pas-Dev/Quayline
 Source0:        %{name}-%{version}.tar.gz
 ExclusiveArch:  x86_64
 
@@ -19,7 +19,7 @@ BuildRequires:  gcc
 BuildRequires:  gcc-c++
 BuildRequires:  make
 BuildRequires:  pkgconf-pkg-config
-BuildRequires:  rust >= 1.80
+BuildRequires:  rust >= 1.90
 BuildRequires:  cargo
 BuildRequires:  nodejs
 BuildRequires:  npm
@@ -51,7 +51,7 @@ sh packaging/linux/metainfo.sh Quayline.desktop > metainfo.xml
 install -Dm644 metainfo.xml %{buildroot}%{_metainfodir}/dev.memepas.quayline.metainfo.xml
 install -Dm644 src-tauri/icons/32x32.png %{buildroot}%{_datadir}/icons/hicolor/32x32/apps/%{name}.png
 install -Dm644 src-tauri/icons/128x128.png %{buildroot}%{_datadir}/icons/hicolor/128x128/apps/%{name}.png
-install -Dm644 src-tauri/icons/128x128@2x.png %{buildroot}%{_datadir}/icons/hicolor/256x256@2/apps/%{name}.png
+install -Dm644 src-tauri/icons/128x128@2x.png %{buildroot}%{_datadir}/icons/hicolor/256x256/apps/%{name}.png
 install -Dm644 src-tauri/icons/icon.png %{buildroot}%{_datadir}/icons/hicolor/512x512/apps/%{name}.png
 
 %files
@@ -63,4 +63,4 @@ install -Dm644 src-tauri/icons/icon.png %{buildroot}%{_datadir}/icons/hicolor/51
 
 %changelog
 * @DATE@ Quayline <noreply@github.com> - @VERSION@-@BUILD@
-- Version @VERSION@ (see https://github.com/Meme-Pas-Dev/quayline/releases)
+- Version @VERSION@ (see https://github.com/Meme-Pas-Dev/Quayline/releases)

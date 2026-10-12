@@ -42,6 +42,8 @@ impl From<VaultError> for CmdError {
             VaultError::Corrupt(detail) => Self::new("corrupt", tr!("err.vault.corrupt", detail = detail)),
             VaultError::UnsupportedVersion(v) => Self::new("corrupt", tr!("err.vault.version", version = v)),
             VaultError::TooManySlots => Self::new("invalid", tr!("err.vault.tooManySlots")),
+            VaultError::InUse => Self::new("vault_in_use", tr!("err.vault.inUse")),
+            VaultError::ModifiedElsewhere => Self::new("vault_modified", tr!("err.vault.modifiedElsewhere")),
             VaultError::Crypto => Self::new("internal", tr!("err.vault.crypto")),
             VaultError::Io(io) => Self::new("internal", tr!("err.vault.io", detail = io)),
         }

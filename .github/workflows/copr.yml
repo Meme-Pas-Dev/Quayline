@@ -2,7 +2,7 @@ name: COPR
 
 # Étiquettes de version : envoie les sources à COPR (dépôt matt-mpd/quayline), qui
 # compile et signe le RPM ; les utilisateurs de Fedora le reçoivent avec « dnf upgrade »
-# ou Discover. Uniquement dans le dépôt public (Meme-Pas-Dev/quayline) ; lancement
+# ou Discover. Uniquement dans le dépôt public (Meme-Pas-Dev/Quayline) ; lancement
 # manuel possible (onglet Actions → COPR → Run workflow).
 # Secret COPR_CONFIG : contenu de ~/.config/copr (jeton d'API COPR, à renouveler à
 # son expiration).
@@ -21,7 +21,7 @@ concurrency:
 jobs:
   copr:
     name: Paquet source et build COPR
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/quayline'
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/Quayline'
     runs-on: ubuntu-latest
     container: registry.fedoraproject.org/fedora:44
     steps:

@@ -118,7 +118,7 @@ pub async fn update_check(app: AppHandle, state: State<'_, UpdateState>) -> CmdR
     if !response.status().is_success() {
         return Err(update_err(tr!("err.update.unreachable", detail = response.status())));
     }
-    let release: Release = response.json().await.map_err(|_| update_err(tr!("err.update.badReply")))?;
+    let release: Release = crate::http::json(response).await.map_err(|_| update_err(tr!("err.update.badReply")))?;
 
     let Some(latest) = parse_version(&release.tag_name) else {
         return Err(update_err(tr!("err.update.badReply")));
@@ -291,10 +291,8 @@ async fn download_text(http: &reqwest::Client, url: &str) -> CmdResult<String> {
     if !response.status().is_success() {
         return Err(update_err(tr!("err.update.download", detail = response.status())));
     }
-    if response.content_length().is_some_and(|l| l > 64 * 1024) {
-        return Err(update_err(tr!("err.update.checksum")));
-    }
-    response.text().await.map_err(|e| update_err(tr!("err.update.download", detail = e)))
+    let bytes = crate::http::body(response, 64 * 1024).await.map_err(|_| update_err(tr!("err.update.checksum")))?;
+    String::from_utf8(bytes).map_err(|_| update_err(tr!("err.update.checksum")))
 }
 
 /// Écrit le fichier et renvoie son empreinte SHA-256 (hexadécimal).

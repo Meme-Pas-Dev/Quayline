@@ -14,7 +14,6 @@
 #[path = "fido2_windows.rs"]
 mod webauthn;
 
-use std::panic::{self, AssertUnwindSafe};
 use std::sync::{mpsc, OnceLock};
 
 use ctap_hid_fido2::fidokey::get_assertion::get_assertion_params::Extension as Gext;
@@ -232,8 +231,9 @@ fn worker() -> &'static mpsc::Sender<Job> {
         let (tx, rx) = mpsc::channel::<Job>();
         std::thread::Builder::new()
             .name("fido2".into())
-            // Une tâche qui panique ne doit pas arrêter le fil.
-            .spawn(move || rx.into_iter().for_each(|job| drop(panic::catch_unwind(AssertUnwindSafe(job)))))
+            // Pas de rattrapage des panics : la version livrée est compilée avec
+            // `panic = "abort"` (voir Cargo.toml), un panic y arrête l'application.
+            .spawn(move || rx.into_iter().for_each(|job| job()))
             .expect("impossible de créer le fil FIDO2");
         tx
     })
@@ -491,11 +491,4 @@ mod tests {
         assert!(threads.windows(2).all(|w| w[0] == w[1]));
     }
 
-    #[test]
-    fn panicking_job_keeps_the_thread() {
-        let result: CmdResult<()> = tauri::async_runtime::block_on(run_blocking(|| panic!("échec simulé")));
-        assert!(result.is_err());
-        let ok = tauri::async_runtime::block_on(run_blocking(|| Ok(1)));
-        assert_eq!(ok.unwrap(), 1);
-    }
 }

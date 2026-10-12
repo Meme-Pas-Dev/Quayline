@@ -1,10 +1,9 @@
 name: RPM Fedora
 
 # Étiquettes de version : RPM signé de la release, construit uniquement dans le dépôt
-# public (Meme-Pas-Dev/quayline), qui reçoit chaque version depuis le dépôt de
+# public (Meme-Pas-Dev/Quayline), qui reçoit chaque version depuis le dépôt de
 # développement (workflow « Publication »). Lancement manuel possible partout (onglet
-# Actions → RPM Fedora → Run workflow). Les versions en cours se testent aussi en
-# compilant sur place : scripts/manage.sh, option « Compiler ici ».
+# Actions → RPM Fedora → Run workflow).
 on:
   push:
     tags: ["v*"]
@@ -27,7 +26,7 @@ env:
 jobs:
   rpm:
     name: Tests et paquet RPM (Fedora 44)
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/quayline'
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/Quayline'
     runs-on: ubuntu-latest
     container: registry.fedoraproject.org/fedora:44
     steps:

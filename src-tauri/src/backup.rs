@@ -49,20 +49,6 @@ fn file_name(path: &std::path::Path) -> String {
     path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
-fn write_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    let mut opts = std::fs::OpenOptions::new();
-    opts.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        opts.mode(0o600);
-    }
-    let mut file = opts.open(path)?;
-    file.write_all(bytes)?;
-    file.sync_all()
-}
-
 /// Exporte la sélection dans un fichier choisi par l'utilisateur, chiffré par
 /// `passphrase`. Le mot de passe maître est exigé : le fichier contient les secrets
 /// du trousseau. Renvoie le nom du fichier, ou rien si l'utilisateur a annulé.
@@ -109,7 +95,7 @@ pub async fn vault_export(
 
     blocking(move || {
         let bytes = export::seal(&data, passphrase.expose().as_bytes(), KdfParams::DEFAULT)?;
-        write_private(&path, &bytes)
+        vault::vault::write_atomic(&path, &bytes)
             .map_err(|e| CmdError::new("io", tr!("err.write", detail = e)))?;
         Ok(Some(file_name(&path)))
     })

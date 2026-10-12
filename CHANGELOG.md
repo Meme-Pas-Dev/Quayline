@@ -6,6 +6,78 @@ used as the text of its GitHub release.
 Chaque version est décrite en anglais, puis en français. La section d'une version sert
 de texte à sa release GitHub.
 
+## [1.8.2] - 2026-10-12
+
+### English
+
+**Security** (fixes following a code audit)
+- Only one copy of the application runs at a time: launching it again brings the
+  existing window to the front. The vault is also locked while open, and a change is
+  no longer saved over a vault modified elsewhere in the meantime: two copies could
+  undo each other's changes, including a password change made after losing a
+  security key.
+- Pasting into a terminal: control characters are removed from the pasted text. A
+  crafted text could end “bracketed paste” mode early and run a command without
+  confirmation.
+- Windows: SFTP downloads refuse file names that Windows would interpret differently
+  (drive letter such as `C:name`, `:` streams, device names such as `CON` or `NUL`,
+  trailing dot or space). A malicious server could otherwise write outside the chosen
+  folder.
+- Enabling the identity provider with 15 security keys registered no longer writes a
+  vault that cannot be opened again; a vault is never saved in a state the
+  application would refuse to read.
+- macOS: copied passwords are excluded from clipboard history managers (Maccy,
+  Raycast, Paste, Alfred…), as on Linux and Windows.
+- While the vault is locked, the application refuses terminal input, transfers and
+  local file operations, even for sessions kept open behind the lock screen.
+- Encrypted export: the file is written atomically and always with owner-only
+  permissions, even when replacing an existing file.
+- Hardening against hostile servers: size limits on identity provider and update
+  responses, depth limit on recursive deletion, limit on the decryption cost of an
+  imported private key, more robust reading of the browser's return after signing in.
+
+**Fixed**
+- Very long file names could not be downloaded (temporary name too long).
+- Minimum password length now counted the same way in the window and in the vault.
+- Fedora package: icon installed in the standard 256×256 folder.
+
+### Français
+
+**Sécurité** (corrections à la suite d'un audit du code)
+- Une seule copie de l'application à la fois : la relancer ramène la fenêtre existante
+  au premier plan. Le coffre est en plus verrouillé tant qu'il est ouvert, et une
+  modification n'est plus enregistrée par-dessus un coffre modifié ailleurs entre-temps :
+  deux copies pouvaient annuler les changements l'une de l'autre, y compris un
+  changement de mot de passe fait après la perte d'une clé de sécurité.
+- Collage dans un terminal : les caractères de contrôle sont retirés du texte collé.
+  Un texte piégé pouvait terminer le mode « collage encadré » avant l'heure et faire
+  exécuter une commande sans validation.
+- Windows : les téléchargements SFTP refusent les noms de fichiers que Windows
+  interpréterait autrement (lecteur comme `C:nom`, flux `:`, noms de périphériques comme
+  `CON` ou `NUL`, point ou espace final). Un serveur malveillant pouvait sinon écrire
+  hors du dossier choisi.
+- Activer le fournisseur d'identité avec 15 clés de sécurité enregistrées n'écrit plus
+  un coffre impossible à rouvrir ; le coffre n'est jamais enregistré dans un état que
+  l'application refuserait de relire.
+- macOS : les mots de passe copiés sont exclus des gestionnaires d'historique du
+  presse-papiers (Maccy, Raycast, Paste, Alfred…), comme sous Linux et Windows.
+- Coffre verrouillé, l'application refuse la saisie dans les terminaux, les transferts
+  et les opérations sur les fichiers locaux, même pour les sessions gardées ouvertes
+  derrière l'écran de verrouillage.
+- Export chiffré : fichier écrit de façon atomique et toujours lisible par son seul
+  propriétaire, même quand il remplace un fichier existant.
+- Durcissement face aux serveurs hostiles : taille limitée des réponses du fournisseur
+  d'identité et de la recherche de mise à jour, profondeur limitée pour la suppression
+  récursive, coût de déchiffrement limité pour une clé privée importée, lecture plus
+  robuste du retour du navigateur après la connexion.
+
+**Corrigé**
+- Les fichiers aux noms très longs ne pouvaient pas être téléchargés (nom temporaire
+  trop long).
+- Longueur minimale du mot de passe comptée de la même façon dans la fenêtre et dans le
+  coffre.
+- Paquet Fedora : icône installée dans le dossier standard 256×256.
+
 ## [1.8.1] - 2026-10-11
 
 ### English

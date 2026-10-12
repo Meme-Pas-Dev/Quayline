@@ -26,7 +26,7 @@ fn identity() {
         assert_eq!(
             conf[field].as_str(),
             Some(expected.as_str()),
-            "tauri.conf.json : « {field} » ne correspond pas à identity.json (lancez scripts/rebrand.py)"
+            "tauri.conf.json : « {field} » ne correspond pas à identity.json (les deux fichiers doivent être modifiés ensemble)"
         );
     }
 }

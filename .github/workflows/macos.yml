@@ -1,11 +1,10 @@
 name: macOS
 
 # - Étiquettes de version : Quayline.app signée (Developer ID) et notarisée, publiée en
-#   .dmg dans la release ; uniquement dans le dépôt public (Meme-Pas-Dev/quayline, où les
+#   .dmg dans la release ; uniquement dans le dépôt public (Meme-Pas-Dev/Quayline, où les
 #   minutes sont gratuites) et si les secrets de signature existent.
 # - Lancement manuel (onglet Actions → macOS → Run workflow) : tests, clippy, puis
 #   l'application, signée si les secrets existent.
-# Voir docs/signature-macos.md.
 on:
   push:
     tags: ["v*"]
@@ -27,7 +26,7 @@ jobs:
   # Sur une machine Linux (minutes ×1) : les secrets ne sont pas lisibles dans un `if`.
   check:
     name: Secrets de signature
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/quayline'
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/Quayline'
     runs-on: ubuntu-latest
     outputs:
       signing: ${{ steps.check.outputs.signing }}

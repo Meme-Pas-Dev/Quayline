@@ -53,6 +53,13 @@ impl SecretClipboard {
             use arboard::SetExtLinux;
             set.exclude_from_history()
         };
+        // Marqueur `org.nspasteboard.ConcealedType`, respecté par les gestionnaires
+        // d'historique (Maccy, Raycast, Paste, Alfred…).
+        #[cfg(target_os = "macos")]
+        let set = {
+            use arboard::SetExtApple;
+            set.exclude_from_history()
+        };
         // Ni l'historique Win+V, ni la synchronisation entre appareils.
         #[cfg(windows)]
         let set = {
@@ -97,10 +104,19 @@ impl SecretClipboard {
 }
 
 /// Prépare un texte collé pour un terminal, comme xterm.js : fins de ligne en `\r`,
-/// séquences de collage retirées du texte (elles permettraient de « sortir » du mode
-/// collage et d'exécuter des commandes), encadrement si l'application l'a demandé.
+/// caractères de contrôle retirés, encadrement si l'application l'a demandé.
+///
+/// Seuls la tabulation et les fins de ligne passent : `ESC` (et `U+009B`, son
+/// équivalent sur un octet) permettrait d'écrire une fin de collage au milieu du texte
+/// et de faire exécuter une commande sans validation. Retirer les séquences de
+/// collage une par une ne suffit pas : en retirer une peut en reconstituer une autre.
 pub fn prepare_paste(text: &str, bracketed: bool) -> Vec<u8> {
-    let cleaned = text.replace("\x1b[200~", "").replace("\x1b[201~", "");
+    let cleaned: String = text
+        .replace("\x1b[200~", "")
+        .replace("\x1b[201~", "")
+        .chars()
+        .filter(|&c| matches!(c, '\t' | '\n' | '\r') || !c.is_control())
+        .collect();
     let cleaned = cleaned.replace("\r\n", "\r").replace('\n', "\r");
     if bracketed {
         format!("\x1b[200~{cleaned}\x1b[201~").into_bytes()
@@ -145,6 +161,16 @@ mod tests {
     fn paste_is_sanitized() {
         assert_eq!(prepare_paste("a\nb\r\nc", false), b"a\rb\rc");
         assert_eq!(prepare_paste("ls\x1b[201~; rm -rf ~\n", true), b"\x1b[200~ls; rm -rf ~\r\x1b[201~");
+        assert_eq!(prepare_paste("a\tb\x07\u{9b}201~c", false), "a\tb201~c".as_bytes());
+    }
+
+    #[test]
+    fn nested_paste_markers_cannot_escape() {
+        // Retirer `ESC[201~` reconstituait une fin de collage avec ce qui l'entourait.
+        let out = prepare_paste("echo ok\x1b[2\x1b[201~01~; touch /tmp/x\n", true);
+        let inner = &out[6..out.len() - 6];
+        assert!(!inner.contains(&0x1b));
+        assert_eq!(inner, b"echo ok[201~; touch /tmp/x\r");
     }
 
     #[test]

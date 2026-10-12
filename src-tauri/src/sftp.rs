@@ -6,7 +6,8 @@
 //! Point de sécurité : les noms de fichiers renvoyés par le serveur ne sont pas de
 //! confiance. Un serveur malveillant pourrait renvoyer `../../.bashrc` pour écrire hors
 //! du dossier de destination lors d'un téléchargement récursif : ces noms sont rejetés
-//! (voir [`safe_name`]).
+//! (voir [`safe_name`]), et chaque chemin local est construit par [`local_child`], qui
+//! applique aussi les règles de Windows (`C:x`, `CON`…) et vérifie le résultat.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -27,6 +28,7 @@ use uuid::Uuid;
 use crate::i18n::tr;
 use crate::error::{CmdError, CmdResult};
 use crate::ssh::{self, Asker, HostKeyVerifier, SessionEvent, Target};
+use crate::state::AppState;
 
 const CHUNK: usize = 256 * 1024;
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(150);
@@ -109,6 +111,45 @@ pub enum TransferEvent {
 /// Nom de fichier acceptable comme composant de chemin (jamais de traversée).
 pub fn safe_name(name: &str) -> bool {
     !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\\', '\0'])
+}
+
+/// Nom acceptable par Windows pour un fichier : pas de lecteur (`C:x` remplacerait tout
+/// le chemin de destination), de flux (`a:b`), de caractère interdit, de nom de
+/// périphérique (`CON`, `nul.txt`…), ni de point ou d'espace final (retirés par Win32).
+fn windows_name_ok(name: &str) -> bool {
+    if name.contains([':', '<', '>', '"', '|', '?', '*']) || name.ends_with(['.', ' ']) {
+        return false;
+    }
+    let stem = name.split('.').next().unwrap_or("").trim_end().to_ascii_uppercase();
+    let device = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$")
+        || (stem.len() == 4
+            && (stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.as_bytes()[3].is_ascii_digit())
+        || ((stem.starts_with("COM") || stem.starts_with("LPT"))
+            && matches!(stem.get(3..), Some("¹" | "²" | "³")));
+    !device
+}
+
+/// Chemin local d'un élément `name` du dossier `dir`, pour y écrire. `None` si le nom
+/// n'est pas un simple nom de fichier sur ce système : le résultat est vérifié, pas
+/// seulement le nom (sous Windows, `Path::join` remplace le chemin par un nom qui
+/// commence par un lecteur).
+pub fn local_child(dir: &Path, name: &str) -> Option<PathBuf> {
+    if !safe_name(name) || name.chars().any(char::is_control) || name.len() > 255 {
+        return None;
+    }
+    if cfg!(windows) && !windows_name_ok(name) {
+        return None;
+    }
+    let mut parts = Path::new(name).components();
+    match (parts.next(), parts.next()) {
+        (Some(std::path::Component::Normal(_)), None) => Some(dir.join(name)),
+        _ => None,
+    }
+}
+
+fn new_local_path(dir: &Path, name: &str) -> CmdResult<PathBuf> {
+    local_child(dir, name).ok_or_else(|| CmdError::invalid(tr!("err.sftp.badName")))
 }
 
 fn validate_new_name(name: &str) -> CmdResult<()> {
@@ -218,7 +259,13 @@ fn remote_entry(dir: &str, name: String, attrs: &FileAttributes, target_is_dir: 
 }
 
 #[tauri::command]
-pub async fn sftp_list(mgr: State<'_, SftpManager>, sftp_id: Uuid, path: String) -> CmdResult<Vec<FileEntry>> {
+pub async fn sftp_list(
+    state: State<'_, AppState>,
+    mgr: State<'_, SftpManager>,
+    sftp_id: Uuid,
+    path: String,
+) -> CmdResult<Vec<FileEntry>> {
+    state.require_unlocked()?;
     let (sftp, _) = mgr.get(sftp_id)?;
     let dir = sftp.canonicalize(path).await.map_err(sftp_err)?;
     let mut entries = Vec::new();
@@ -242,20 +289,40 @@ pub async fn sftp_list(mgr: State<'_, SftpManager>, sftp_id: Uuid, path: String)
 
 /// Résout un chemin distant (`~`, `..`, liens) en chemin absolu.
 #[tauri::command]
-pub async fn sftp_realpath(mgr: State<'_, SftpManager>, sftp_id: Uuid, path: String) -> CmdResult<String> {
+pub async fn sftp_realpath(
+    state: State<'_, AppState>,
+    mgr: State<'_, SftpManager>,
+    sftp_id: Uuid,
+    path: String,
+) -> CmdResult<String> {
+    state.require_unlocked()?;
     let (sftp, _) = mgr.get(sftp_id)?;
     sftp.canonicalize(path).await.map_err(sftp_err)
 }
 
 #[tauri::command]
-pub async fn sftp_mkdir(mgr: State<'_, SftpManager>, sftp_id: Uuid, dir: String, name: String) -> CmdResult<()> {
+pub async fn sftp_mkdir(
+    state: State<'_, AppState>,
+    mgr: State<'_, SftpManager>,
+    sftp_id: Uuid,
+    dir: String,
+    name: String,
+) -> CmdResult<()> {
+    state.require_unlocked()?;
     validate_new_name(&name)?;
     let (sftp, _) = mgr.get(sftp_id)?;
     sftp.create_dir(join_remote(&dir, &name)).await.map_err(sftp_err)
 }
 
 #[tauri::command]
-pub async fn sftp_rename(mgr: State<'_, SftpManager>, sftp_id: Uuid, path: String, new_name: String) -> CmdResult<()> {
+pub async fn sftp_rename(
+    state: State<'_, AppState>,
+    mgr: State<'_, SftpManager>,
+    sftp_id: Uuid,
+    path: String,
+    new_name: String,
+) -> CmdResult<()> {
+    state.require_unlocked()?;
     validate_new_name(&new_name)?;
     let (sftp, _) = mgr.get(sftp_id)?;
     let parent = path.trim_end_matches('/').rsplit_once('/').map(|(p, _)| if p.is_empty() { "/" } else { p }).unwrap_or(".");
@@ -263,26 +330,37 @@ pub async fn sftp_rename(mgr: State<'_, SftpManager>, sftp_id: Uuid, path: Strin
 }
 
 #[tauri::command]
-pub async fn sftp_delete(mgr: State<'_, SftpManager>, sftp_id: Uuid, paths: Vec<String>) -> CmdResult<()> {
+pub async fn sftp_delete(
+    state: State<'_, AppState>,
+    mgr: State<'_, SftpManager>,
+    sftp_id: Uuid,
+    paths: Vec<String>,
+) -> CmdResult<()> {
+    state.require_unlocked()?;
     let (sftp, _) = mgr.get(sftp_id)?;
     for path in paths {
-        remove_remote(&sftp, &path).await?;
+        remove_remote(&sftp, &path, 0).await?;
     }
     Ok(())
 }
 
-/// Suppression récursive. Les liens symboliques sont supprimés, jamais suivis.
+/// Suppression récursive, bornée en profondeur comme le téléchargement. Les liens
+/// symboliques sont supprimés, jamais suivis.
 fn remove_remote<'a>(
     sftp: &'a SftpSession,
     path: &'a str,
+    depth: u32,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = CmdResult<()>> + Send + 'a>> {
     Box::pin(async move {
+        if depth > MAX_SIZE_DEPTH {
+            return Err(CmdError::invalid(tr!("err.sftp.tooDeep", path = path, count = MAX_SIZE_DEPTH)));
+        }
         let meta = sftp.symlink_metadata(path).await.map_err(sftp_err)?;
         if meta.file_type().is_dir() {
             for entry in sftp.read_dir(path).await.map_err(sftp_err)? {
                 let name = entry.file_name();
                 if safe_name(&name) {
-                    remove_remote(sftp, &join_remote(path, &name)).await?;
+                    remove_remote(sftp, &join_remote(path, &name), depth + 1).await?;
                 }
             }
             sftp.remove_dir(path).await.map_err(sftp_err)
@@ -363,7 +441,8 @@ fn local_entry(path: &Path, meta: &std::fs::Metadata, target_is_dir: bool) -> Fi
 }
 
 #[tauri::command]
-pub async fn local_list(path: String) -> CmdResult<Vec<FileEntry>> {
+pub async fn local_list(state: State<'_, AppState>, path: String) -> CmdResult<Vec<FileEntry>> {
+    state.require_unlocked()?;
     tauri::async_runtime::spawn_blocking(move || {
         if cfg!(windows) && path.is_empty() {
             return Ok(local_drives());
@@ -384,7 +463,8 @@ pub async fn local_list(path: String) -> CmdResult<Vec<FileEntry>> {
 }
 
 #[tauri::command]
-pub fn local_realpath(path: String) -> CmdResult<String> {
+pub fn local_realpath(state: State<'_, AppState>, path: String) -> CmdResult<String> {
+    state.require_unlocked()?;
     if cfg!(windows) && path.is_empty() {
         return Ok(path);
     }
@@ -392,17 +472,17 @@ pub fn local_realpath(path: String) -> CmdResult<String> {
 }
 
 #[tauri::command]
-pub fn local_mkdir(dir: String, name: String) -> CmdResult<()> {
-    validate_new_name(&name)?;
-    std::fs::create_dir(Path::new(&dir).join(name)).map_err(io_err)
+pub fn local_mkdir(state: State<'_, AppState>, dir: String, name: String) -> CmdResult<()> {
+    state.require_unlocked()?;
+    std::fs::create_dir(new_local_path(Path::new(&dir), &name)?).map_err(io_err)
 }
 
 #[tauri::command]
-pub fn local_rename(path: String, new_name: String) -> CmdResult<()> {
-    validate_new_name(&new_name)?;
+pub fn local_rename(state: State<'_, AppState>, path: String, new_name: String) -> CmdResult<()> {
+    state.require_unlocked()?;
     let p = PathBuf::from(&path);
     let parent = p.parent().ok_or_else(|| CmdError::invalid(tr!("err.sftp.badPath")))?;
-    let target = parent.join(new_name);
+    let target = new_local_path(parent, &new_name)?;
     if target.exists() {
         return Err(CmdError::invalid(tr!("err.sftp.exists")));
     }
@@ -411,7 +491,8 @@ pub fn local_rename(path: String, new_name: String) -> CmdResult<()> {
 
 /// Les fichiers locaux vont à la corbeille (récupérables), jamais supprimés définitivement.
 #[tauri::command]
-pub fn local_trash(paths: Vec<String>) -> CmdResult<()> {
+pub fn local_trash(state: State<'_, AppState>, paths: Vec<String>) -> CmdResult<()> {
+    state.require_unlocked()?;
     trash::delete_all(&paths).map_err(|e| CmdError::new("io", tr!("err.sftp.trash", detail = e)))
 }
 
@@ -476,23 +557,27 @@ const CANCELLED: &str = "\u{0}cancelled";
 
 #[tauri::command]
 pub fn sftp_upload(
+    state: State<'_, AppState>,
     app: AppHandle,
     sftp_id: Uuid,
     local_paths: Vec<String>,
     remote_dir: String,
     overwrite: bool,
 ) -> CmdResult<Vec<Uuid>> {
+    state.require_unlocked()?;
     start_transfers(app, sftp_id, Direction::Upload, local_paths, remote_dir, overwrite)
 }
 
 #[tauri::command]
 pub fn sftp_download(
+    state: State<'_, AppState>,
     app: AppHandle,
     sftp_id: Uuid,
     remote_paths: Vec<String>,
     local_dir: String,
     overwrite: bool,
 ) -> CmdResult<Vec<Uuid>> {
+    state.require_unlocked()?;
     start_transfers(app, sftp_id, Direction::Download, remote_paths, local_dir, overwrite)
 }
 
@@ -677,11 +762,11 @@ fn download_limit(size: u64) -> u64 {
 }
 
 async fn download(job: &mut Job, source: &str, local_dir: &str, name: &str) -> Result<(), String> {
-    if !safe_name(name) {
+    let Some(dest) = local_child(Path::new(local_dir), name) else {
         return Err(tr!("err.sftp.refusedName", name = name));
-    }
+    };
     job.total = remote_size(&job.sftp.clone(), source, &job.cancel.clone(), 0).await;
-    download_item(job, source, &Path::new(local_dir).join(name), 0).await
+    download_item(job, source, &dest, 0).await
 }
 
 fn download_item<'a>(
@@ -713,11 +798,11 @@ fn download_item<'a>(
                 .map(|e| e.file_name())
                 .collect();
             for name in entries {
-                if !safe_name(&name) {
+                let Some(child) = local_child(dest, &name) else {
                     job.skipped += 1;
                     continue;
-                }
-                download_item(job, &join_remote(src, &name), &dest.join(&name), depth + 1).await?;
+                };
+                download_item(job, &join_remote(src, &name), &child, depth + 1).await?;
             }
             Ok(())
         } else if ft.is_file() {
@@ -729,6 +814,16 @@ fn download_item<'a>(
     })
 }
 
+/// Nom du fichier temporaire d'un téléchargement : `.<nom>.part-<id>`, le nom étant
+/// raccourci pour rester sous la limite de 255 octets des systèmes de fichiers.
+fn part_name(name: &str, id: &str) -> String {
+    let mut end = name.len().min(255 - ".".len() - ".part-".len() - id.len());
+    while !name.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!(".{}.part-{id}", &name[..end])
+}
+
 async fn download_file(job: &mut Job, src: &str, dest: &Path, size: u64) -> Result<(), String> {
     // Ne jamais écrire à travers un lien symbolique local existant.
     if let Ok(m) = tokio::fs::symlink_metadata(dest).await {
@@ -738,10 +833,9 @@ async fn download_file(job: &mut Job, src: &str, dest: &Path, size: u64) -> Resu
             return Ok(());
         }
     }
-    let part = dest.with_file_name(format!(
-        ".{}.part-{}",
-        dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(),
-        &job.id.simple().to_string()[..8]
+    let part = dest.with_file_name(part_name(
+        &dest.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(),
+        &job.id.simple().to_string()[..8],
     ));
     let mut input = job.sftp.open(src).await.map_err(|e| tr!("err.sftp.reading", path = src, detail = e))?;
     let mut output = tokio::fs::OpenOptions::new()
@@ -809,6 +903,32 @@ mod tests {
         for ok in ["fichier.txt", ".bashrc", "..cache", "nom avec espaces", "été"] {
             assert!(safe_name(ok), "{ok:?} devrait être accepté");
         }
+    }
+
+    #[test]
+    fn local_children_stay_in_their_folder() {
+        let dir = Path::new("dest");
+        assert_eq!(local_child(dir, "fichier.txt"), Some(dir.join("fichier.txt")));
+        for bad in ["", "..", "a/b", "a\\b", "x\ny", "x\u{1b}y", &"a".repeat(256)] {
+            assert_eq!(local_child(dir, bad), None, "{bad:?} devrait être refusé");
+        }
+        for bad in ["C:evil.dll", "x:flux", "CON", "nul.txt", "Com1", "LPT9.log", "a.", "a ", "a?b", "a*", "COM¹"] {
+            assert!(!windows_name_ok(bad), "{bad:?} devrait être refusé sous Windows");
+        }
+        for ok in ["fichier.txt", ".bashrc", "console.log", "COM10", "connexion", "a..b"] {
+            assert!(windows_name_ok(ok), "{ok:?} devrait être accepté sous Windows");
+        }
+        if cfg!(windows) {
+            assert_eq!(local_child(Path::new(r"C:\Users\x"), "C:evil.dll"), None);
+        }
+    }
+
+    #[test]
+    fn part_names_fit_the_file_system() {
+        assert_eq!(part_name("a.txt", "12345678"), ".a.txt.part-12345678");
+        let long = "é".repeat(127);
+        let part = part_name(&long, "12345678");
+        assert!(part.len() <= 255 && part.ends_with(".part-12345678"));
     }
 
     #[test]

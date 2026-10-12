@@ -29,6 +29,10 @@ pub enum Error {
     UnsupportedVersion(u32),
     #[error("Maximum number of unlock methods reached.")]
     TooManySlots,
+    #[error("The vault is already open in another window.")]
+    InUse,
+    #[error("The vault was modified by another program since it was opened.")]
+    ModifiedElsewhere,
     #[error("Cryptographic error.")]
     Crypto,
     #[error("Input/output error: {0}")]

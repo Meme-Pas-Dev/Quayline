@@ -249,6 +249,12 @@ pub struct Vault {
     dek: Zeroizing<[u8; KEY_LEN]>,
     slots: Vec<Slot>,
     pub data: VaultData,
+    /// Nonce de l'en-tête tel qu'il est sur disque (dernier fichier lu ou écrit) : il
+    /// change à chaque enregistrement, ce qui permet de détecter une écriture extérieure.
+    disk_nonce: Vec<u8>,
+    /// Verrou exclusif (fichier voisin `<coffre>.lock`) tenu tant que le coffre est
+    /// ouvert : un second processus ne peut pas l'ouvrir en même temps.
+    _lock: fs::File,
 }
 
 impl std::fmt::Debug for Vault {
@@ -276,7 +282,9 @@ impl Vault {
         let mut dek = Zeroizing::new([0u8; KEY_LEN]);
         OsRng.fill_bytes(dek.as_mut());
         let slot = password_slot(password, kdf, &dek)?;
-        let vault = Vault { path, dek, slots: vec![slot], data: VaultData::default() };
+        let lock = acquire_lock(&path)?;
+        let mut vault =
+            Vault { path, dek, slots: vec![slot], data: VaultData::default(), disk_nonce: Vec::new(), _lock: lock };
         vault.save()?;
         Ok(vault)
     }
@@ -284,10 +292,7 @@ impl Vault {
     /// Déverrouille le coffre avec le mot de passe maître.
     pub fn unlock(path: impl Into<PathBuf>, password: &[u8]) -> Result<Self> {
         let path = path.into();
-        let raw = fs::read(&path).map_err(|e| match e.kind() {
-            io::ErrorKind::NotFound => Error::NotFound,
-            _ => Error::Io(e),
-        })?;
+        let raw = read_vault(&path)?;
         let (aad, header, ciphertext) = parse(&raw)?;
 
         let mut found = None;
@@ -335,7 +340,7 @@ impl Vault {
     /// Déverrouille avec le secret `hmac-secret` renvoyé par la clé FIDO2 du slot `id`.
     pub fn unlock_with_fido2(path: impl Into<PathBuf>, id: Uuid, secret: &[u8; KEY_LEN]) -> Result<Self> {
         let path = path.into();
-        let raw = fs::read(&path)?;
+        let raw = read_vault(&path)?;
         let (aad, header, ciphertext) = parse(&raw)?;
         let dek = header
             .slots
@@ -350,7 +355,7 @@ impl Vault {
     /// après authentification). `binding` est celui validé par l'authentification.
     pub fn unlock_with_oidc_key(path: impl Into<PathBuf>, binding: &OidcBinding, key: &[u8; KEY_LEN]) -> Result<Self> {
         let path = path.into();
-        let raw = fs::read(&path)?;
+        let raw = read_vault(&path)?;
         let (aad, header, ciphertext) = parse(&raw)?;
         let dek = header
             .slots
@@ -371,6 +376,12 @@ impl Vault {
         if header.nonce.len() != NONCE_LEN {
             return Err(Error::Corrupt("invalid nonce"));
         }
+        // Le verrou est pris une fois les identifiants vérifiés, puis le fichier relu :
+        // un autre processus a pu l'enregistrer entre-temps.
+        let lock = acquire_lock(&path)?;
+        if read_vault(&path)?.get(..aad.len()) != Some(aad) {
+            return Err(Error::ModifiedElsewhere);
+        }
         // La DEK est correcte : un échec ici signifie que le fichier a été altéré.
         let plain = Zeroizing::new(
             XChaCha20Poly1305::new(dek.as_ref().into())
@@ -380,12 +391,22 @@ impl Vault {
         let data: VaultData =
             serde_json::from_slice(&plain).map_err(|_| Error::Corrupt("contenu illisible"))?;
 
-        Ok(Vault { path, dek, slots: header.slots, data })
+        Ok(Vault { path, dek, slots: header.slots, data, disk_nonce: header.nonce, _lock: lock })
     }
 
     /// Chiffre et écrit le coffre de façon atomique (fichier temporaire + rename),
     /// avec des permissions 0600.
-    pub fn save(&self) -> Result<()> {
+    ///
+    /// Refuse d'écrire un fichier que [`Vault::unlock`] refuserait de relire, et
+    /// d'écraser un fichier modifié depuis sa lecture (par une autre copie de
+    /// l'application ou un outil de synchronisation) : l'écraser annulerait ses
+    /// changements, y compris un renouvellement de la clé après la perte d'un moyen de
+    /// déverrouillage.
+    pub fn save(&mut self) -> Result<()> {
+        check_slots(&self.slots).map_err(|_| Error::TooManySlots)?;
+        if self.on_disk_nonce()? != self.disk_nonce {
+            return Err(Error::ModifiedElsewhere);
+        }
         let header = Header { version: FORMAT_VERSION, slots: self.slots.clone(), nonce: random_vec(NONCE_LEN) };
         let header_json = serde_json::to_vec(&header).map_err(|_| Error::Crypto)?;
 
@@ -400,7 +421,18 @@ impl Vault {
             .map_err(|_| Error::Crypto)?;
         out.extend_from_slice(&ciphertext);
 
-        write_atomic(&self.path, &out)
+        write_atomic(&self.path, &out)?;
+        self.disk_nonce = header.nonce;
+        Ok(())
+    }
+
+    /// Nonce de l'en-tête du fichier actuellement sur disque (vide s'il n'existe pas).
+    fn on_disk_nonce(&self) -> Result<Vec<u8>> {
+        match fs::read(&self.path) {
+            Ok(raw) => Ok(parse(&raw)?.1.nonce),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+            Err(e) => Err(Error::Io(e)),
+        }
     }
 
     /// Vérifie un mot de passe sans toucher à l'état courant (pour confirmer
@@ -456,6 +488,10 @@ impl Vault {
         let slot = Slot::seal(SlotKind::Oidc(binding), key, &self.dek)?;
         let previous = self.slots.clone();
         self.slots.retain(|s| !matches!(s.kind, SlotKind::Oidc(_)));
+        if self.slots.len() >= MAX_SLOTS {
+            self.slots = previous;
+            return Err(Error::TooManySlots);
+        }
         self.slots.push(slot);
         if let Err(e) = self.save() {
             self.slots = previous;
@@ -554,12 +590,7 @@ fn parse(raw: &[u8]) -> Result<(&[u8], Header, &[u8])> {
     if header.slots.is_empty() {
         return Err(Error::Corrupt("no unlock slot"));
     }
-    // Un seul mot de passe maître, et un nombre raisonnable de slots : le
-    // déverrouillage essaie chaque slot « mot de passe » (un Argon2 par slot).
-    let password_slots = header.slots.iter().filter(|s| matches!(s.kind, SlotKind::Password { .. })).count();
-    if password_slots != 1 || header.slots.len() > MAX_SLOTS {
-        return Err(Error::Corrupt("invalid unlock slots"));
-    }
+    check_slots(&header.slots)?;
     Ok((&raw[..12 + header_len], header, &raw[12 + header_len..]))
 }
 
@@ -583,7 +614,49 @@ pub(crate) fn serialize_zeroizing<T: Serialize>(value: &T) -> Result<Zeroizing<V
     Ok(buf)
 }
 
-fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
+/// Un seul mot de passe maître, et un nombre raisonnable de slots : le
+/// déverrouillage essaie chaque slot « mot de passe » (un Argon2 par slot).
+/// Vérifié à la lecture comme à l'écriture.
+fn check_slots(slots: &[Slot]) -> Result<()> {
+    let password_slots = slots.iter().filter(|s| matches!(s.kind, SlotKind::Password { .. })).count();
+    if password_slots != 1 || slots.len() > MAX_SLOTS {
+        return Err(Error::Corrupt("invalid unlock slots"));
+    }
+    Ok(())
+}
+
+fn read_vault(path: &Path) -> Result<Vec<u8>> {
+    fs::read(path).map_err(|e| match e.kind() {
+        io::ErrorKind::NotFound => Error::NotFound,
+        _ => Error::Io(e),
+    })
+}
+
+/// Prend le verrou exclusif du coffre (`<coffre>.lock`, à côté). Le verrou est libéré
+/// par le système à la fermeture du fichier, même si le processus s'arrête brutalement.
+fn acquire_lock(path: &Path) -> Result<fs::File> {
+    let dir = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    create_private_dir(dir)?;
+    let file_name = path.file_name().ok_or(Error::Corrupt("invalid vault path"))?;
+    let mut opts = OpenOptions::new();
+    opts.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let file = opts.open(dir.join(format!("{}.lock", file_name.to_string_lossy())))?;
+    match file.try_lock() {
+        Ok(()) => Ok(file),
+        Err(fs::TryLockError::WouldBlock) => Err(Error::InUse),
+        Err(fs::TryLockError::Error(e)) => Err(Error::Io(e)),
+    }
+}
+
+/// Écrit `bytes` dans `path` de façon atomique (fichier temporaire 0600 + renommage) :
+/// en cas d'échec, l'ancien fichier reste intact ; en cas de remplacement, le nouveau
+/// fichier a bien les droits 0600 (pas ceux du fichier remplacé).
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     let dir = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
     create_private_dir(dir)?;
     let file_name = path.file_name().ok_or(Error::Corrupt("invalid vault path"))?;
@@ -807,7 +880,7 @@ mod tests {
     #[test]
     fn nonce_changes_on_every_save() {
         let (_d, path) = tmp();
-        let v = Vault::create(&path, PW, KDF).unwrap();
+        let mut v = Vault::create(&path, PW, KDF).unwrap();
         let a = fs::read(&path).unwrap();
         v.save().unwrap();
         let b = fs::read(&path).unwrap();
@@ -871,8 +944,7 @@ mod tests {
 
         let (_, b) = Vault::oidc_binding(&path).unwrap().unwrap();
         assert_eq!(b, binding());
-        let v = Vault::unlock_with_oidc_key(&path, &b, &key).unwrap();
-        assert_eq!(v.data.hosts.len(), 1);
+        assert_eq!(Vault::unlock_with_oidc_key(&path, &b, &key).unwrap().data.hosts.len(), 1);
         // Le mot de passe reste valable.
         Vault::unlock(&path, PW).unwrap();
         assert!(matches!(Vault::unlock_with_oidc_key(&path, &b, &[8u8; KEY_LEN]), Err(Error::InvalidCredentials)));
@@ -916,7 +988,8 @@ mod tests {
         let mut v = Vault::create(&path, PW, KDF).unwrap();
         let key = [7u8; KEY_LEN];
         v.set_oidc(binding(), &key).unwrap();
-        Vault::unlock_with_oidc_key(&path, &binding(), &key).unwrap();
+        drop(v);
+        let mut v = Vault::unlock_with_oidc_key(&path, &binding(), &key).unwrap();
         v.remove_oidc().unwrap();
         assert!(Vault::oidc_binding(&path).unwrap().is_none());
         assert!(v.oidc().is_none());
@@ -931,10 +1004,57 @@ mod tests {
     #[test]
     fn no_temp_files_left() {
         let (_d, path) = tmp();
-        let v = Vault::create(&path, PW, KDF).unwrap();
+        let mut v = Vault::create(&path, PW, KDF).unwrap();
         v.save().unwrap();
-        let entries: Vec<_> = fs::read_dir(path.parent().unwrap()).unwrap().collect();
-        assert_eq!(entries.len(), 1);
+        let mut entries: Vec<_> =
+            fs::read_dir(path.parent().unwrap()).unwrap().map(|e| e.unwrap().file_name()).collect();
+        entries.sort();
+        assert_eq!(entries, ["vault.qlv", "vault.qlv.lock"]);
+    }
+
+    #[test]
+    fn slot_limit_holds_for_oidc_too() {
+        let (_d, path) = tmp();
+        let mut v = Vault::create(&path, PW, KDF).unwrap();
+        let mut n = 0u8;
+        while v.add_fido2(fido2_binding(&format!("k{n}")), &[n; KEY_LEN]).is_ok() {
+            n += 1;
+        }
+        assert_eq!(usize::from(n), MAX_SLOTS - 1);
+        assert!(matches!(v.set_oidc(binding(), &[9u8; KEY_LEN]), Err(Error::TooManySlots)));
+        assert!(v.oidc().is_none());
+        drop(v);
+        // Tout ce qui a été écrit se relit.
+        Vault::unlock(&path, PW).unwrap();
+    }
+
+    #[test]
+    fn second_instance_is_refused() {
+        let (_d, path) = tmp();
+        let v = Vault::create(&path, PW, KDF).unwrap();
+        assert!(matches!(Vault::unlock(&path, PW), Err(Error::InUse)));
+        // Un mauvais mot de passe reste signalé comme tel.
+        assert!(matches!(Vault::unlock(&path, b"wrong password!!"), Err(Error::InvalidCredentials)));
+        drop(v);
+        Vault::unlock(&path, PW).unwrap();
+    }
+
+    #[test]
+    fn external_write_is_not_overwritten() {
+        let (_d, path) = tmp();
+        let mut v = Vault::create(&path, PW, KDF).unwrap();
+        v.save().unwrap();
+        // Une autre copie du fichier (synchronisation, autre installation) le remplace.
+        let other = path.with_file_name("other.qlv");
+        let mut w = Vault::create(&other, PW, KDF).unwrap();
+        w.data.settings.terminal_font_size = 20;
+        w.save().unwrap();
+        fs::copy(&other, &path).unwrap();
+
+        v.data.settings.terminal_font_size = 16;
+        assert!(matches!(v.save(), Err(Error::ModifiedElsewhere)));
+        drop(v);
+        assert_eq!(Vault::unlock(&path, PW).unwrap().data.settings.terminal_font_size, 20);
     }
 
     fn fido2_binding(label: &str) -> Fido2Binding {
@@ -955,6 +1075,7 @@ mod tests {
         let a = v.add_fido2(fido2_binding("principale"), &[1u8; KEY_LEN]).unwrap();
         let b = v.add_fido2(fido2_binding("secours"), &[2u8; KEY_LEN]).unwrap();
         assert_eq!(v.fido2_keys().len(), 2);
+        drop(v);
 
         let listed = Vault::fido2_bindings(&path).unwrap();
         assert_eq!(listed.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![a, b]);
@@ -964,6 +1085,7 @@ mod tests {
         assert!(matches!(Vault::unlock_with_fido2(&path, a, &[2u8; KEY_LEN]), Err(Error::InvalidCredentials)));
         assert!(matches!(Vault::unlock_with_fido2(&path, Uuid::new_v4(), &[1u8; KEY_LEN]), Err(Error::InvalidCredentials)));
 
+        let mut v = Vault::unlock(&path, PW).unwrap();
         assert!(v.remove_fido2(a).unwrap());
         assert!(!v.remove_fido2(a).unwrap());
         assert!(matches!(Vault::unlock_with_fido2(&path, a, &[1u8; KEY_LEN]), Err(Error::InvalidCredentials)));
@@ -1038,6 +1160,7 @@ mod tests {
         v.change_password(PW, b"another long passphrase", KDF).unwrap();
         assert_ne!(*v.dek, old_dek, "la clé de données doit changer");
         assert!(v.fido2_keys().is_empty(), "les clés FIDO2 sont retirées");
+        drop(v);
 
         // Le nouveau fichier s'ouvre avec le nouveau mot de passe, contenu intact.
         let reopened = Vault::unlock(&path, b"another long passphrase").unwrap();

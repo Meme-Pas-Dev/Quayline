@@ -2,7 +2,7 @@ name: Windows
 
 # Étiquettes de version : installateur Windows (NSIS, non signé pour l'instant) joint à
 # la release, avec son empreinte signée par la clé du projet ; uniquement dans le dépôt
-# public (Meme-Pas-Dev/quayline). Lancement manuel possible partout (onglet Actions →
+# public (Meme-Pas-Dev/Quayline). Lancement manuel possible partout (onglet Actions →
 # Windows → Run workflow), pour un installateur d'essai (artifact).
 on:
   push:
@@ -24,7 +24,7 @@ env:
 jobs:
   windows:
     name: Tests et installateur (Windows)
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/quayline'
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/Quayline'
     runs-on: windows-latest
     defaults:
       run:

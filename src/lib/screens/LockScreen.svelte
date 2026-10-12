@@ -11,6 +11,7 @@
   import QrCode from "../components/QrCode.svelte";
   import StrengthMeter from "../components/StrengthMeter.svelte";
 
+  // Comptée en caractères (`[...password]`), comme le backend, et non en unités UTF-16.
   const MIN_LENGTH = 12;
 
   let {
@@ -131,7 +132,7 @@
   const canSubmit = $derived(
     mode === "unlock"
       ? password.length > 0
-      : password.length >= MIN_LENGTH && password === confirm && acknowledged,
+      : [...password].length >= MIN_LENGTH && password === confirm && acknowledged,
   );
 
   async function submit(e: SubmitEvent) {

@@ -428,12 +428,21 @@ fn normalize_pem(pem: Secret) -> Secret {
     Secret::new(clean)
 }
 
+const MAX_BCRYPT_ROUNDS: u32 = 1024;
+
 fn validate_key(identity: &Identity) -> CmdResult<()> {
     let Some(pem) = &identity.private_key else { return Ok(()) };
     let key = PrivateKey::from_openssh(pem.expose()).map_err(|_| {
         CmdError::invalid(tr!("err.identity.keyUnreadable"))
     })?;
     if key.is_encrypted() {
+        // Le nombre de tours vient du fichier : une clé fabriquée pourrait occuper
+        // l'application pendant des heures (ssh-keygen en met 16 par défaut).
+        if let ssh_key::Kdf::Bcrypt { rounds, .. } = key.kdf() {
+            if *rounds > MAX_BCRYPT_ROUNDS {
+                return Err(CmdError::invalid(tr!("err.identity.tooManyRounds", max = MAX_BCRYPT_ROUNDS)));
+            }
+        }
         if let Some(passphrase) = &identity.key_passphrase {
             key.decrypt(passphrase.expose().as_bytes())
                 .map_err(|_| CmdError::invalid(tr!("err.identity.badPassphrase")))?;
@@ -547,7 +556,13 @@ pub fn ssh_open(
 }
 
 #[tauri::command]
-pub fn ssh_write(ssh: State<'_, SshManager>, session_id: Uuid, data: String) -> CmdResult<()> {
+pub fn ssh_write(
+    state: State<'_, AppState>,
+    ssh: State<'_, SshManager>,
+    session_id: Uuid,
+    data: String,
+) -> CmdResult<()> {
+    state.require_unlocked()?;
     ssh.write(session_id, data.into_bytes())
 }
 
@@ -555,11 +570,13 @@ pub fn ssh_write(ssh: State<'_, SshManager>, session_id: Uuid, data: String) -> 
 /// backend, sans passer par l'interface.
 #[tauri::command]
 pub fn ssh_paste(
+    state: State<'_, AppState>,
     clipboard: State<'_, crate::clipboard::SecretClipboard>,
     ssh: State<'_, SshManager>,
     session_id: Uuid,
     bracketed: bool,
 ) -> CmdResult<()> {
+    state.require_unlocked()?;
     let text = clipboard
         .read_text()
         .map_err(|e| CmdError::new("clipboard", tr!("err.clipboard.unreadable", detail = e)))?;

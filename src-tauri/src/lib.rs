@@ -3,6 +3,7 @@ mod clipboard;
 mod commands;
 mod error;
 mod fido2;
+mod http;
 mod i18n;
 mod identity;
 mod oidc;
@@ -65,6 +66,19 @@ fn lock_now(handle: &AppHandle, reason: &str) {
     let _ = handle.emit("vault://locked", reason);
 }
 
+/// Ramène la fenêtre au premier plan (authentification faite dans le navigateur ou sur
+/// un téléphone, second lancement de l'application). Au mieux : certains bureaux
+/// refusent le vol de focus.
+pub(crate) fn bring_to_front(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        if window.set_focus().is_err() {
+            let _ = window.request_user_attention(Some(tauri::UserAttentionType::Informational));
+        }
+    }
+}
+
 pub fn run() {
     platform::hardening::harden_process();
     // TLS (Pocket ID) : fournisseur crypto « ring », vérification par le magasin de
@@ -81,6 +95,9 @@ pub fn run() {
     #[cfg(target_os = "macos")]
     let builder = builder.menu(platform::menu::build);
     builder
+        // En premier : un second lancement ramène la fenêtre existante et s'arrête avant
+        // d'ouvrir quoi que ce soit (le coffre est en plus protégé par un verrou).
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| bring_to_front(app)))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(ssh::SshManager::default())

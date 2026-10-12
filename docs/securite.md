@@ -19,8 +19,8 @@
 | Écriture à travers un lien symbolique local | Un fichier de destination qui est un lien n'est jamais écrasé ; liens jamais suivis |
 | Fichier tronqué après une coupure | Téléchargement dans `.nom.part-…`, renommé seulement une fois complet et synchronisé |
 | Suppression locale par erreur | Les fichiers locaux vont à la corbeille (norme freedesktop, visible dans Dolphin) |
-| Mot de passe laissé dans le presse-papiers | Copié par le backend (jamais par l'interface), exclu de l'historique de KDE (`x-kde-passwordManagerHint`), effacé après le délai réglé, au verrouillage et à la fermeture — seulement s'il est encore présent |
-| Session oubliée ouverte | Par défaut, le verrouillage ferme les terminaux, les explorateurs SFTP et annule les transferts. Si l'utilisateur choisit de garder les sessions, elles restent masquées et inertes (ni clavier ni souris) derrière l'écran de verrouillage ; le contenu affiché des terminaux reste alors en mémoire |
+| Mot de passe laissé dans le presse-papiers | Copié par le backend (jamais par l'interface), exclu des historiques du presse-papiers (KDE : `x-kde-passwordManagerHint` ; Windows : historique `Win+V` et synchronisation ; macOS : `org.nspasteboard.ConcealedType`), effacé après le délai réglé, au verrouillage et à la fermeture — seulement s'il est encore présent |
+| Session oubliée ouverte | Par défaut, le verrouillage ferme les terminaux, les explorateurs SFTP et annule les transferts. Si l'utilisateur choisit de garder les sessions, elles restent masquées et inertes (ni clavier ni souris) derrière l'écran de verrouillage, et le backend refuse toute action tant que le coffre est verrouillé (saisie, collage, transferts, opérations sur les fichiers) ; le contenu affiché des terminaux reste alors en mémoire |
 
 ## Ce que Quayline ne protège pas
 

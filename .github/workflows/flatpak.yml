@@ -20,7 +20,7 @@ jobs:
   # qui n'a pas forcément git.
   build-info:
     name: Numéro de build
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/quayline'
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/Quayline'
     runs-on: ubuntu-latest
     outputs:
       build: ${{ steps.info.outputs.build }}

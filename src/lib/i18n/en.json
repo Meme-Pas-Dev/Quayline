@@ -773,5 +773,8 @@
   "settings.appearance.tiles": "Host tiles",
   "settings.appearance.tilesHint": "“Compact” hides the host address (shown on hover).",
   "settings.appearance.tilesStandard": "Standard",
-  "settings.appearance.tilesCompact": "Compact"
+  "settings.appearance.tilesCompact": "Compact",
+  "err.vault.inUse": "The vault is already open in another window of the application. Close it, then try again.",
+  "err.vault.modifiedElsewhere": "The vault was modified by another copy of the application since it was unlocked: this change was not saved. Lock and unlock again to reload it.",
+  "err.identity.tooManyRounds": "This key requires too much computation to decrypt (more than {max} bcrypt rounds). Re-encrypt it with fewer rounds (ssh-keygen -p -a 100)."
 }

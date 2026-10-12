@@ -58,12 +58,12 @@ sudo dnf copr enable matt-mpd/quayline
 sudo dnf install quayline
 ```
 
-Or install the RPM by hand: from the latest [release](https://github.com/Meme-Pas-Dev/quayline/releases), download
+Or install the RPM by hand: from the latest [release](https://github.com/Meme-Pas-Dev/Quayline/releases), download
 the RPM (`Quayline-X.Y.Z-N.x86_64.rpm`), `SHA256SUMS` and `SHA256SUMS.asc`, then check
 the signature and checksum before installing:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/Meme-Pas-Dev/quayline/main/packaging/signing-key.asc
+curl -fsSLO https://raw.githubusercontent.com/Meme-Pas-Dev/Quayline/main/packaging/signing-key.asc
 gpg --dearmor < signing-key.asc > quayline.gpg
 gpgv --keyring ./quayline.gpg SHA256SUMS.asc SHA256SUMS   # checksum signature
 sha256sum -c --ignore-missing SHA256SUMS                    # package checksum
@@ -80,14 +80,14 @@ The Flatpak is checked the same way with `SHA256SUMS.flatpak` and
 #### macOS (Apple Silicon)
 
 Download `Quayline-X.Y.Z-macos-arm64.dmg` from the
-[releases](https://github.com/Meme-Pas-Dev/quayline/releases), then drag Quayline into
+[releases](https://github.com/Meme-Pas-Dev/Quayline/releases), then drag Quayline into
 Applications. The app is signed (Developer ID) and notarized by Apple. The vault is
 stored in `~/Library/Application Support/dev.memepas.quayline/`.
 
 #### Windows 11 (preview)
 
 Download `Quayline-X.Y.Z-windows-x64-setup.exe` from the
-[releases](https://github.com/Meme-Pas-Dev/quayline/releases) and run it. The installer
+[releases](https://github.com/Meme-Pas-Dev/Quayline/releases) and run it. The installer
 offers to install for the current user only (no administrator account needed) or for
 all users. It is not signed yet: Windows SmartScreen shows “Windows protected your PC”
 (“More info” → “Run anyway”). You can check it against `SHA256SUMS.windows`, signed
@@ -223,12 +223,12 @@ sudo dnf copr enable matt-mpd/quayline
 sudo dnf install quayline
 ```
 
-Ou installer le RPM à la main : télécharger depuis la dernière [release](https://github.com/Meme-Pas-Dev/quayline/releases)
+Ou installer le RPM à la main : télécharger depuis la dernière [release](https://github.com/Meme-Pas-Dev/Quayline/releases)
 le RPM (`Quayline-X.Y.Z-N.x86_64.rpm`), `SHA256SUMS` et `SHA256SUMS.asc`, puis vérifier
 la signature et l'empreinte avant d'installer :
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/Meme-Pas-Dev/quayline/main/packaging/signing-key.asc
+curl -fsSLO https://raw.githubusercontent.com/Meme-Pas-Dev/Quayline/main/packaging/signing-key.asc
 gpg --dearmor < signing-key.asc > quayline.gpg
 gpgv --keyring ./quayline.gpg SHA256SUMS.asc SHA256SUMS   # signature des empreintes
 sha256sum -c --ignore-missing SHA256SUMS                    # empreinte du paquet
@@ -244,7 +244,7 @@ Le Flatpak se vérifie de la même façon avec `SHA256SUMS.flatpak` et
 
 #### macOS (Apple Silicon)
 
-Télécharger `Quayline-X.Y.Z-macos-arm64.dmg` dans les [releases](https://github.com/Meme-Pas-Dev/quayline/releases), puis
+Télécharger `Quayline-X.Y.Z-macos-arm64.dmg` dans les [releases](https://github.com/Meme-Pas-Dev/Quayline/releases), puis
 glisser Quayline dans Applications. L'application est signée (Developer ID) et
 notarisée par Apple. Le coffre est rangé dans
 `~/Library/Application Support/dev.memepas.quayline/`.
@@ -252,7 +252,7 @@ notarisée par Apple. Le coffre est rangé dans
 #### Windows 11 (préversion)
 
 Télécharger `Quayline-X.Y.Z-windows-x64-setup.exe` dans les
-[releases](https://github.com/Meme-Pas-Dev/quayline/releases) et le lancer.
+[releases](https://github.com/Meme-Pas-Dev/Quayline/releases) et le lancer.
 L'installateur propose d'installer pour l'utilisateur actif seulement (sans compte
 administrateur) ou pour tous les utilisateurs. Il n'est pas encore signé : Windows
 SmartScreen affiche « Windows a protégé votre ordinateur » (« Informations

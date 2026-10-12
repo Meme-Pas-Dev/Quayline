@@ -189,15 +189,13 @@ fn http_client() -> CmdResult<reqwest::Client> {
 
 async fn discover(http: &reqwest::Client, issuer: &str) -> CmdResult<Discovery> {
     let url = format!("{issuer}/.well-known/openid-configuration");
-    let doc: Discovery = http
+    let response = http
         .get(&url)
         .send()
         .await
         .and_then(|r| r.error_for_status())
-        .map_err(|e| oidc_err(tr!("err.oidc.unreachableAt", url = url, detail = e)))?
-        .json()
-        .await
-        .map_err(|_| oidc_err(tr!("err.oidc.badDiscovery")))?;
+        .map_err(|e| oidc_err(tr!("err.oidc.unreachableAt", url = url, detail = e)))?;
+    let doc: Discovery = crate::http::json(response).await.map_err(|_| oidc_err(tr!("err.oidc.badDiscovery")))?;
     // L'issuer annoncé doit être exactement celui configuré (protection contre la substitution).
     if doc.issuer.trim_end_matches('/') != issuer {
         return Err(oidc_err(tr!("err.oidc.issuerMismatch", announced = doc.issuer, issuer = issuer)));
@@ -307,7 +305,7 @@ impl BrowserReply {
             Some(e) => page(false, &tr!("oidc.page.denied"), &escape(&e.message)),
         };
         let _ = self.stream.write_all(body.as_bytes()).await;
-        bring_to_front(&self.app);
+        crate::bring_to_front(&self.app);
     }
 }
 
@@ -396,14 +394,14 @@ async fn exchange_code(
         .await
         .map_err(|e| oidc_err(tr!("err.oidc.codeExchange", detail = e)))?;
     if !response.status().is_success() {
-        let detail = response.json::<TokenError>().await.ok().map(|e| e.error_description.unwrap_or(e.error));
+        let detail = crate::http::json::<TokenError>(response).await.ok().map(|e| e.error_description.unwrap_or(e.error));
         return Err(oidc_err(tr!(
             "err.oidc.codeExchangeRefused",
             provider = cfg.name(),
             detail = detail.map(|d| format!(" ({d})")).unwrap_or_default()
         )));
     }
-    let tokens: TokenResponse = response.json().await.map_err(|_| oidc_err(tr!("err.oidc.badToken")))?;
+    let tokens: TokenResponse = crate::http::json(response).await.map_err(|_| oidc_err(tr!("err.oidc.badToken")))?;
 
     let claims = verify_id_token(http, doc, &cfg.client_id, &tokens.id_token).await?;
     if claims.nonce.as_deref() != Some(nonce) {
@@ -518,7 +516,7 @@ async fn poll_device(app: &AppHandle, flow: &mut DeviceFlow) -> CmdResult<Identi
         // Coupure réseau passagère : on réessaie au prochain intervalle.
         let Ok(response) = response else { continue };
         if response.status().is_success() {
-            let tokens: TokenResponse = response.json().await.map_err(|_| oidc_err(tr!("err.oidc.badToken")))?;
+            let tokens: TokenResponse = crate::http::json(response).await.map_err(|_| oidc_err(tr!("err.oidc.badToken")))?;
             let claims = verify_id_token(&http, &flow.doc, &flow.cfg.client_id, &tokens.id_token).await?;
             // Le jeton vient directement de l'instance, en échange du code de l'appareil :
             // le nonce n'est pas exigé (RFC 8628), mais vérifié s'il est renvoyé.
@@ -527,7 +525,7 @@ async fn poll_device(app: &AppHandle, flow: &mut DeviceFlow) -> CmdResult<Identi
             }
             return Ok(claims.into_identity(&flow.cfg.groups_claim));
         }
-        let error: TokenError = response.json().await.map_err(|_| oidc_err(tr!("err.oidc.badReply")))?;
+        let error: TokenError = crate::http::json(response).await.map_err(|_| oidc_err(tr!("err.oidc.badReply")))?;
         match error.error.as_str() {
             "authorization_pending" => {}
             "slow_down" => flow.interval += Duration::from_secs(5),
@@ -540,18 +538,6 @@ async fn poll_device(app: &AppHandle, flow: &mut DeviceFlow) -> CmdResult<Identi
                     detail = error.error_description.as_deref().unwrap_or(other)
                 )))
             }
-        }
-    }
-}
-
-/// Ramène la fenêtre au premier plan après une authentification faite ailleurs
-/// (navigateur, téléphone). Au mieux : certains bureaux refusent le vol de focus.
-fn bring_to_front(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        if window.set_focus().is_err() {
-            let _ = window.request_user_attention(Some(tauri::UserAttentionType::Informational));
         }
     }
 }
@@ -578,15 +564,13 @@ async fn verify_id_token(
     if !ALLOWED.contains(&header.alg) {
         return Err(oidc_err(tr!("err.oidc.algorithm", alg = format!("{:?}", header.alg))));
     }
-    let jwks: JwkSet = http
+    let response = http
         .get(&doc.jwks_uri)
         .send()
         .await
         .and_then(|r| r.error_for_status())
-        .map_err(|e| oidc_err(tr!("err.oidc.jwksUnreachable", detail = e)))?
-        .json()
-        .await
-        .map_err(|_| oidc_err(tr!("err.oidc.badJwks")))?;
+        .map_err(|e| oidc_err(tr!("err.oidc.jwksUnreachable", detail = e)))?;
+    let jwks: JwkSet = crate::http::json(response).await.map_err(|_| oidc_err(tr!("err.oidc.badJwks")))?;
     let jwk = match &header.kid {
         Some(kid) => jwks.find(kid),
         None if jwks.keys.len() == 1 => jwks.keys.first(),
@@ -650,6 +634,22 @@ fn escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
+/// En-tête d'une requête HTTP, lu jusqu'à la ligne vide (il peut arriver en plusieurs
+/// morceaux) ; `None` au-delà de 8 Kio ou si la connexion se ferme avant.
+async fn read_request_head(stream: &mut tokio::net::TcpStream) -> Option<Vec<u8>> {
+    const MAX: usize = 8192;
+    let mut head = Vec::with_capacity(1024);
+    let mut buf = [0u8; 1024];
+    while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+        let n = stream.read(&mut buf).await.ok().filter(|&n| n > 0)?;
+        head.extend_from_slice(&buf[..n]);
+        if head.len() > MAX {
+            return None;
+        }
+    }
+    Some(head)
+}
+
 /// Attend la redirection du navigateur vers http://127.0.0.1:<port>/callback.
 async fn wait_for_callback(
     listener: &TcpListener,
@@ -658,12 +658,10 @@ async fn wait_for_callback(
 ) -> CmdResult<(String, tokio::net::TcpStream)> {
     loop {
         let (mut stream, _) = listener.accept().await.map_err(|e| oidc_err(e.to_string()))?;
-        let mut buf = vec![0u8; 8192];
-        let n = match tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buf)).await {
-            Ok(Ok(n)) => n,
-            _ => continue,
+        let Ok(Some(head)) = tokio::time::timeout(Duration::from_secs(5), read_request_head(&mut stream)).await else {
+            continue;
         };
-        let request = String::from_utf8_lossy(&buf[..n]);
+        let request = String::from_utf8_lossy(&head);
         let target = request.lines().next().and_then(|l| l.strip_prefix("GET ")).and_then(|l| l.split(' ').next());
         let Some(url) = target.and_then(|t| Url::parse(&format!("http://127.0.0.1{t}")).ok()) else {
             continue;
@@ -1026,7 +1024,7 @@ pub async fn oidc_device_start(app: AppHandle) -> CmdResult<DeviceStart> {
         .await
         .map_err(|e| oidc_err(tr!("err.oidc.unreachable", detail = e)))?;
     if !response.status().is_success() {
-        let detail = response.json::<TokenError>().await.ok().map(|e| e.error_description.unwrap_or(e.error));
+        let detail = crate::http::json::<TokenError>(response).await.ok().map(|e| e.error_description.unwrap_or(e.error));
         return Err(oidc_err(tr!(
             "err.oidc.phoneRefused",
             provider = cfg.name(),
@@ -1034,7 +1032,7 @@ pub async fn oidc_device_start(app: AppHandle) -> CmdResult<DeviceStart> {
         )));
     }
     let auth: DeviceAuthorization =
-        response.json().await.map_err(|_| oidc_err(tr!("err.oidc.badPhoneReply")))?;
+        crate::http::json(response).await.map_err(|_| oidc_err(tr!("err.oidc.badPhoneReply")))?;
     check_user_code(&auth.user_code)?;
     let page = check_verification_uri(&auth.verification_uri, &cfg)?;
     let qr_target = match &auth.verification_uri_complete {
@@ -1071,7 +1069,7 @@ pub async fn oidc_device_wait(app: AppHandle) -> CmdResult<()> {
         .take()
         .ok_or_else(|| oidc_err(tr!("err.oidc.noPhoneFlow")))?;
     let identity = poll_device(&app, &mut flow).await?;
-    bring_to_front(&app);
+    crate::bring_to_front(&app);
     finish_unlock(&app, flow.binding, identity).await
 }
 

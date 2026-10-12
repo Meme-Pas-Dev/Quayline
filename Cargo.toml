@@ -3,15 +3,18 @@ resolver = "2"
 members = ["crates/vault", "src-tauri"]
 
 [workspace.package]
-version = "1.8.1"
+version = "1.8.2"
 edition = "2021"
 license = "GPL-3.0-or-later"
-rust-version = "1.80"
+rust-version = "1.90"
 
 [profile.release]
 # LTO « thin » + compilation parallèle : build bien plus rapide, binaire à peine plus gros.
 lto = "thin"
 opt-level = "s"
+# Un panic arrête l'application sans dérouler la pile : pas d'état à moitié modifié,
+# pas de déroulement à travers du code `unsafe` (FFI). En contrepartie, rattraper un
+# panic (`catch_unwind`) n'a aucun effet en version livrée : ne pas s'y fier.
 panic = "abort"
 strip = true
 

@@ -24,6 +24,8 @@ russh = { version = "0.64", default-features = false, features = ["ring", "rsa"]
 russh-sftp = "3"
 trash = "5"
 tauri-plugin-clipboard-manager = "2"
+# Une seule instance : deux processus écraseraient le coffre l'un de l'autre.
+tauri-plugin-single-instance = "2"
 # Choix du fichier d'export / d'import, ouvert depuis le backend uniquement.
 tauri-plugin-dialog = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
