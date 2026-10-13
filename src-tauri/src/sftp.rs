@@ -54,7 +54,7 @@ pub struct SftpManager {
 }
 
 impl SftpManager {
-    fn get(&self, id: Uuid) -> CmdResult<(Arc<SftpSession>, Arc<Semaphore>)> {
+    pub(crate) fn get(&self, id: Uuid) -> CmdResult<(Arc<SftpSession>, Arc<Semaphore>)> {
         let conns = self.conns.lock().unwrap_or_else(|p| p.into_inner());
         let c = conns.get(&id).ok_or_else(|| CmdError::new("no_session", tr!("err.sftp.closed")))?;
         Ok((c.sftp.clone(), c.limiter.clone()))
@@ -95,6 +95,11 @@ pub struct FileEntry {
     size: u64,
     modified: Option<u64>,
     permissions: Option<String>,
+    /// Bits de permission (`0o7777`), pour l'affichage en octal et la modification.
+    mode: Option<u32>,
+    /// Propriétaire et groupe : nom si le système le donne, sinon numéro.
+    owner: Option<String>,
+    group: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -174,11 +179,11 @@ fn mode_string(mode: u32) -> String {
 }
 
 /// Le détail vient du serveur (message d'état SFTP) : neutralisé.
-fn sftp_err(e: russh_sftp::client::error::Error) -> CmdError {
+pub(crate) fn sftp_err(e: russh_sftp::client::error::Error) -> CmdError {
     CmdError::new("sftp", tr!("err.sftp.generic", detail = crate::text::neutralize(&e.to_string(), 500)))
 }
 
-fn io_err(e: std::io::Error) -> CmdError {
+pub(crate) fn io_err(e: std::io::Error) -> CmdError {
     CmdError::new("io", tr!("err.sftp.local", detail = e))
 }
 
@@ -239,7 +244,8 @@ async fn connect(
 }
 
 #[tauri::command]
-pub fn sftp_close(mgr: State<'_, SftpManager>, sftp_id: Uuid) {
+pub fn sftp_close(mgr: State<'_, SftpManager>, edits: State<'_, crate::sftp_edit::EditManager>, sftp_id: Uuid) {
+    edits.stop_session(sftp_id);
     mgr.close(sftp_id);
 }
 
@@ -256,6 +262,9 @@ fn remote_entry(dir: &str, name: String, attrs: &FileAttributes, target_is_dir: 
         size: attrs.len(),
         modified: attrs.mtime.map(u64::from),
         permissions: attrs.permissions.map(mode_string),
+        mode: attrs.permissions.map(|m| m & 0o7777),
+        owner: attrs.user.clone().map(|u| crate::text::neutralize(&u, 64)).or(attrs.uid.map(|u| u.to_string())),
+        group: attrs.group.clone().map(|g| crate::text::neutralize(&g, 64)).or(attrs.gid.map(|g| g.to_string())),
     }
 }
 
@@ -390,6 +399,113 @@ fn local_permissions(_meta: &std::fs::Metadata) -> Option<String> {
     None
 }
 
+#[cfg(unix)]
+fn local_mode(meta: &std::fs::Metadata) -> Option<u32> {
+    use std::os::unix::fs::PermissionsExt;
+    Some(meta.permissions().mode() & 0o7777)
+}
+
+#[cfg(not(unix))]
+fn local_mode(_meta: &std::fs::Metadata) -> Option<u32> {
+    None
+}
+
+/// Propriétaire et groupe d'un fichier local (noms des comptes du système).
+#[cfg(unix)]
+fn local_owner(meta: &std::fs::Metadata) -> (Option<String>, Option<String>) {
+    use std::os::unix::fs::MetadataExt;
+    (Some(crate::platform::account_name(meta.uid(), false)), Some(crate::platform::account_name(meta.gid(), true)))
+}
+
+#[cfg(not(unix))]
+fn local_owner(_meta: &std::fs::Metadata) -> (Option<String>, Option<String>) {
+    (None, None)
+}
+
+/// Propriétés à jour d'un fichier distant (pour la fenêtre « Propriétés »).
+#[tauri::command]
+pub async fn sftp_stat(
+    state: State<'_, AppState>,
+    mgr: State<'_, SftpManager>,
+    sftp_id: Uuid,
+    path: String,
+) -> CmdResult<FileEntry> {
+    state.require_unlocked()?;
+    let (sftp, _) = mgr.get(sftp_id)?;
+    let attrs = sftp.symlink_metadata(path.clone()).await.map_err(sftp_err)?;
+    let link_to_dir = attrs.file_type().is_symlink()
+        && sftp.metadata(path.clone()).await.map(|m| m.file_type().is_dir()).unwrap_or(false);
+    let (dir, name) = split_remote(&path);
+    Ok(remote_entry(&dir, name, &attrs, link_to_dir))
+}
+
+/// Modifie les permissions d'un fichier distant (bits `0o7777`).
+#[tauri::command]
+pub async fn sftp_chmod(
+    state: State<'_, AppState>,
+    mgr: State<'_, SftpManager>,
+    sftp_id: Uuid,
+    path: String,
+    mode: u32,
+) -> CmdResult<()> {
+    state.require_unlocked()?;
+    check_mode(mode)?;
+    let (sftp, _) = mgr.get(sftp_id)?;
+    let mut attrs = FileAttributes::empty();
+    attrs.permissions = Some(mode);
+    sftp.set_metadata(path, attrs).await.map_err(sftp_err)
+}
+
+/// Propriétés à jour d'un fichier local.
+#[tauri::command(async)]
+pub fn local_stat(state: State<'_, AppState>, path: String) -> CmdResult<FileEntry> {
+    state.require_unlocked()?;
+    let p = PathBuf::from(&path);
+    let meta = std::fs::symlink_metadata(&p).map_err(io_err)?;
+    let target_is_dir = meta.file_type().is_symlink() && p.is_dir();
+    Ok(local_entry(&p, &meta, target_is_dir))
+}
+
+/// Modifie les permissions d'un fichier local (Unix seulement : Windows utilise des
+/// listes de contrôle d'accès).
+#[tauri::command(async)]
+pub fn local_chmod(state: State<'_, AppState>, path: String, mode: u32) -> CmdResult<()> {
+    state.require_unlocked()?;
+    check_mode(mode)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // Jamais à travers un lien : on modifierait sa cible.
+        let meta = std::fs::symlink_metadata(&path).map_err(io_err)?;
+        if meta.file_type().is_symlink() {
+            return Err(CmdError::invalid(tr!("err.sftp.chmodUnsupported")));
+        }
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).map_err(io_err)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Err(CmdError::invalid(tr!("err.sftp.chmodUnsupported")))
+    }
+}
+
+fn check_mode(mode: u32) -> CmdResult<()> {
+    if mode > 0o7777 {
+        return Err(CmdError::invalid(tr!("err.sftp.badMode")));
+    }
+    Ok(())
+}
+
+/// Dossier parent et nom d'un chemin distant (« / » pour la racine).
+pub(crate) fn split_remote(path: &str) -> (String, String) {
+    let trimmed = path.trim_end_matches('/');
+    match trimmed.rfind('/') {
+        Some(0) => ("/".into(), trimmed[1..].into()),
+        Some(i) => (trimmed[..i].into(), trimmed[i + 1..].into()),
+        None => (".".into(), trimmed.into()),
+    }
+}
+
 /// Chemin local affiché. Sous Windows, `canonicalize` renvoie la forme étendue
 /// (« \\?\C:\… », « \\?\UNC\serveur\… ») : forme usuelle, acceptée partout ailleurs.
 fn display_path(path: &Path) -> String {
@@ -422,6 +538,9 @@ fn local_drives() -> Vec<FileEntry> {
                 size: 0,
                 modified: None,
                 permissions: None,
+                mode: None,
+                owner: None,
+                group: None,
             })
         })
         .collect()
@@ -438,6 +557,9 @@ fn local_entry(path: &Path, meta: &std::fs::Metadata, target_is_dir: bool) -> Fi
         size: meta.len(),
         modified: meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs()),
         permissions: local_permissions(meta),
+        mode: local_mode(meta),
+        owner: local_owner(meta).0,
+        group: local_owner(meta).1,
     }
 }
 
@@ -923,6 +1045,16 @@ mod tests {
         if cfg!(windows) {
             assert_eq!(local_child(Path::new(r"C:\Users\x"), "C:evil.dll"), None);
         }
+    }
+
+    #[test]
+    fn remote_paths_split_and_modes_are_checked() {
+        assert_eq!(split_remote("/etc/hosts"), ("/etc".into(), "hosts".into()));
+        assert_eq!(split_remote("/hosts"), ("/".into(), "hosts".into()));
+        assert_eq!(split_remote("/srv/app/"), ("/srv".into(), "app".into()));
+        assert!(check_mode(0o755).is_ok() && check_mode(0o4755).is_ok());
+        assert!(check_mode(0o10000).is_err());
+        assert_eq!(mode_string(0o640), "rw-r-----");
     }
 
     #[test]

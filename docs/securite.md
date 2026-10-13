@@ -128,6 +128,37 @@ phrase de passe ──Argon2id (256 Mio, 3 passes)──▶ clé ──XChaCha20
   explicite (« Remplacer ») : un serveur n'a qu'une clé approuvée.
 - Le fournisseur d'identité et les clés FIDO2 ne sont jamais exportés : ils sont liés à l'installation.
 
+## Modification des fichiers distants
+
+- **Éditeur intégré** (5 Mio au plus) : le contenu va du serveur à l'interface et
+  inversement, sans fichier local. Encodage détecté (`text_encoding.rs`) : BOM UTF-8 ou
+  UTF-16, UTF-16 petit boutiste sans BOM, UTF-8, sinon Windows-1252 ; refus si binaire
+  (octet nul, ou plus de 1 % de caractères de contrôle). Réenregistré dans le même
+  encodage ; un caractère impossible à représenter (Windows-1252) bloque l'envoi.
+- **Application par défaut du système** (512 Mio au plus) : copie dans
+  `<cache de l'application>/remote-edits/<identifiant>/` (dossier `0700`, fichier
+  `0600`), nom vérifié comme pour un téléchargement (`local_child`). La copie est
+  surveillée (une fois par seconde) et renvoyée quand elle a fini de changer. Elle est
+  supprimée quand le même fichier est rouvert, à la fermeture de la session SFTP, au
+  verrouillage (même si les sessions sont gardées), à la fermeture de Quayline, et au
+  démarrage suivant après une fermeture brutale. En cas de conflit, refuser le
+  remplacement arrête aussi le suivi. Tant
+  qu'elle existe, elle est lisible par tout programme de la session : c'est le prix de
+  l'ouverture dans une autre application. Dans le Flatpak, l'ouverture passe par le
+  portail `OpenURI.OpenFile` avec l'option `writable` (`platform/linux/portal.rs`) :
+  `xdg-open` n'y donnerait qu'un accès en lecture, et l'enregistrement serait refusé.
+  Sous macOS, la copie d'un fichier texte reçoit l'attribut `com.apple.TextEncoding`
+  (encodage détecté comme pour l'éditeur intégré), que TextEdit lit et conserve : un
+  fichier Windows-1252 garde ses accents.
+- **Envoi** : comparaison préalable de la date et de la taille du fichier distant avec
+  celles de l'ouverture (erreur « conflit » sinon, remplacement seulement sur demande) ;
+  remplacement par un fichier temporaire du même dossier, permissions reprises, original
+  mis de côté puis restauré si le renommage échoue. Écriture sur place si le fichier est
+  un lien symbolique, appartient à un autre utilisateur (le remplacer en changerait le
+  propriétaire) ou si le dossier n'accepte pas de nouveau fichier.
+- **Permissions** : modification des bits `0o7777` seulement (jamais à travers un lien
+  symbolique pour les fichiers locaux ; pas sous Windows, qui utilise des ACL).
+
 ## Fournisseur d'identité (OIDC)
 
 Pocket ID, Authentik, Authelia, Keycloak, Microsoft Entra ID, Google, ou tout fournisseur

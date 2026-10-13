@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-edits-subscribe"
+description = "Enables the edits_subscribe command without any pre-configured scope."
+commands.allow = ["edits_subscribe"]
+
+[[permission]]
+identifier = "deny-edits-subscribe"
+description = "Denies the edits_subscribe command without any pre-configured scope."
+commands.deny = ["edits_subscribe"]

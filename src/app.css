@@ -34,6 +34,16 @@
   --ring: 0 0 0 3px var(--accent-soft);
   --overlay: rgba(5, 7, 12, 0.62);
 
+  /* Coloration syntaxique de l'éditeur intégré. */
+  --syn-keyword: #c792ea;
+  --syn-string: #a5e075;
+  --syn-number: #f78c6c;
+  --syn-comment: #6b7394;
+  --syn-name: #82aaff;
+  --syn-type: #ffcb6b;
+  --syn-tag: #ff7a93;
+  --syn-meta: #89ddff;
+
   color-scheme: dark;
 }
 
@@ -59,6 +69,14 @@
   --shadow: 0 10px 30px rgba(20, 24, 40, 0.08);
   --shadow-lg: 0 24px 60px rgba(20, 24, 40, 0.18);
   --overlay: rgba(20, 24, 40, 0.38);
+  --syn-keyword: #8a3ffc;
+  --syn-string: #2e7d32;
+  --syn-number: #c4501b;
+  --syn-comment: #7b8194;
+  --syn-name: #1f5fc4;
+  --syn-type: #9a6700;
+  --syn-tag: #c62860;
+  --syn-meta: #0b7a8a;
   color-scheme: light;
 }
 

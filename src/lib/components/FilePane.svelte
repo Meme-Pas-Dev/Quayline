@@ -29,6 +29,9 @@
     ondelete,
     onsend,
     ondrop,
+    onproperties,
+    onedit,
+    onopenexternal,
   }: {
     side: Side;
     title: string;
@@ -48,7 +51,30 @@
     onsend: (entries: FileEntry[]) => void;
     /** Fichiers lâchés depuis l'autre panneau. */
     ondrop: (paths: string[], from: Side) => void;
+    onproperties?: (entry: FileEntry) => void;
+    /** Fichier distant : éditeur intégré, ou application par défaut du système. */
+    onedit?: (entry: FileEntry) => void;
+    onopenexternal?: (entry: FileEntry) => void;
   } = $props();
+
+  // Colonne « Permissions », affichée ou non (préférence commune aux deux panneaux).
+  const PERMS_KEY = "quayline.files.permissions";
+  let showPerms = $state(readPref());
+  function readPref() {
+    try {
+      return localStorage.getItem(PERMS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+  function togglePerms() {
+    showPerms = !showPerms;
+    try {
+      localStorage.setItem(PERMS_KEY, showPerms ? "1" : "0");
+    } catch {
+      // Préférence non retenue : sans conséquence.
+    }
+  }
 
 
   let showHidden = $state(false);
@@ -57,7 +83,9 @@
   let pathInput = $state("");
   let editingPath = $state(false);
   let dropActive = $state(false);
-  let menu = $state<{ x: number; y: number; entry: FileEntry } | null>(null);
+  // x, y : position affichée ; cx, cy : curseur au clic droit.
+  let menu = $state<{ x: number; y: number; cx: number; cy: number; entry: FileEntry } | null>(null);
+  let menuEl = $state<HTMLDivElement>();
   let dialog = $state<
     { kind: "mkdir" } | { kind: "rename"; entry: FileEntry } | { kind: "delete"; entries: FileEntry[] } | null
   >(null);
@@ -110,9 +138,21 @@
       selected = new Set([entry.path]);
       anchor = entry.path;
     }
-    const rect = paneEl.getBoundingClientRect();
-    menu = { x: e.clientX - rect.left, y: e.clientY - rect.top, entry };
+    menu = { x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY, entry };
   }
+
+  // Garde le menu entier dans la fenêtre : à gauche ou au-dessus du curseur s'il
+  // dépasse à droite ou en bas. Calculé depuis le curseur (et non la position déjà
+  // corrigée), avec une largeur fixe (libellés sur une ligne), pour ne décaler qu'une fois.
+  $effect(() => {
+    if (!menu || !menuEl) return;
+    const r = menuEl.getBoundingClientRect();
+    let x = menu.cx;
+    let y = menu.cy;
+    if (x + r.width > window.innerWidth - 8) x = Math.max(8, x - r.width);
+    if (y + r.height > window.innerHeight - 8) y = Math.max(8, Math.min(y - r.height, window.innerHeight - r.height - 8));
+    if (x !== menu.x || y !== menu.y) menu = { ...menu, x, y };
+  });
 
   function onkeydown(e: KeyboardEvent) {
     if (dialog || editingPath || (e.target as HTMLElement).tagName === "INPUT") return;
@@ -202,6 +242,8 @@
 
 <svelte:window
   onclick={() => (menu = null)}
+  onpointerdown={(e) => menu && !menuEl?.contains(e.target as Node) && (menu = null)}
+  onresize={() => (menu = null)}
   onpointermove={onwindowpointermove}
   onpointerup={onwindowpointerup}
   onblur={onwindowpointerup}
@@ -241,6 +283,14 @@
       <button class="btn ghost icon sm" title={t("files.refresh")} onclick={onrefresh}><Icon name="refresh" size={16} /></button>
       <button class="btn ghost icon sm" title={t("files.newFolder")} onclick={() => (dialog = { kind: "mkdir" })}>
         <Icon name="folderPlus" size={16} />
+      </button>
+      <button
+        class="btn ghost icon sm"
+        class:on={showPerms}
+        title={showPerms ? t("files.hidePermissions") : t("files.showPermissions")}
+        onclick={togglePerms}
+      >
+        <Icon name="shield" size={16} />
       </button>
       <button
         class="btn ghost icon sm"
@@ -299,9 +349,10 @@
     {/if}
   </div>
 
-  <div class="table">
+  <div class="table" class:perms={showPerms}>
     <div class="thead">
       <span>{t("files.name")}</span>
+      {#if showPerms}<span>{t("files.permissions")}</span>{/if}
       <span class="num">{t("files.size")}</span>
       <span>{t("files.modified")}</span>
     </div>
@@ -330,6 +381,11 @@
             <span class="ficon" class:dir={entry.isDir}><Icon name={iconFor(entry)} size={16} /></span>
             <span class="label">{displayName(entry.name)}</span>
           </span>
+          {#if showPerms}
+            <span class="perm mono" title={entry.owner || entry.group ? `${entry.owner ?? "?"} : ${entry.group ?? "?"}` : undefined}
+              >{entry.permissions ?? ""}</span
+            >
+          {/if}
           <span class="num">{entry.isDir ? "" : formatSize(entry.size)}</span>
           <span class="date">{formatDate(entry.modified)}</span>
         </div>
@@ -352,13 +408,22 @@
   </footer>
 
   {#if menu}
-    <div class="menu" style:left="{menu.x}px" style:top="{menu.y}px" role="menu">
+    <div class="menu" bind:this={menuEl} style:left="{menu.x}px" style:top="{menu.y}px" role="menu">
       {#if selection.length === 1 && menu.entry.isDir}
         <button onclick={() => onnavigate(menu!.entry.path)}><Icon name="folder" size={15} /> {t("files.open")}</button>
       {/if}
       <button onclick={() => onsend(selection)}><Icon name={sendIcon} size={15} /> {sendLabel}</button>
+      {#if selection.length === 1 && !menu.entry.isDir && onedit}
+        <button onclick={() => onedit(menu!.entry)}><Icon name="edit" size={15} /> {t("files.editFile")}</button>
+      {/if}
+      {#if selection.length === 1 && !menu.entry.isDir && onopenexternal}
+        <button onclick={() => onopenexternal(menu!.entry)}><Icon name="external" size={15} /> {t("files.openWith")}</button>
+      {/if}
       {#if selection.length === 1}
         <button onclick={() => (dialog = { kind: "rename", entry: menu!.entry })}><Icon name="edit" size={15} /> {t("files.rename")}</button>
+      {/if}
+      {#if selection.length === 1 && onproperties}
+        <button onclick={() => onproperties(menu!.entry)}><Icon name="info" size={15} /> {t("files.properties")}</button>
       {/if}
       <button class="danger" onclick={() => (dialog = { kind: "delete", entries: selection })}>
         <Icon name="trash" size={15} />
@@ -546,6 +611,15 @@
     align-items: center;
     padding: 0 12px;
   }
+  .table.perms .thead,
+  .table.perms .row {
+    grid-template-columns: minmax(0, 1fr) 86px 84px 118px;
+  }
+  .perm {
+    font-size: 12px;
+    color: var(--text-muted, var(--text-faint));
+    white-space: nowrap;
+  }
   .thead {
     height: 30px;
     font-size: 11.5px;
@@ -634,8 +708,9 @@
     font-size: 13px;
   }
   .menu {
-    position: absolute;
-    z-index: 20;
+    position: fixed;
+    z-index: 50;
+    width: max-content;
     min-width: 200px;
     padding: 5px;
     background: var(--surface-2);
@@ -655,6 +730,7 @@
     background: transparent;
     font-size: 13px;
     text-align: left;
+    white-space: nowrap;
   }
   .menu button:hover {
     background: var(--surface-hover);

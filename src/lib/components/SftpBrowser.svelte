@@ -20,7 +20,11 @@
   import Icon from "./Icon.svelte";
   import Modal from "./Modal.svelte";
   import SessionPrompts from "./SessionPrompts.svelte";
+  import PropertiesDialog from "./PropertiesDialog.svelte";
+  import TextEditor from "./TextEditor.svelte";
+  import ConfirmDialog from "./ConfirmDialog.svelte";
   import { toast } from "./toast.svelte";
+  import { externalEdits, openExternal, overwriteExternal, stopExternal } from "../edits.svelte";
 
   let { tab, visible }: { tab: SessionTab; visible: boolean } = $props();
 
@@ -38,10 +42,13 @@
   let remotePane = $state<FilePane>();
 
   let conflict = $state<{ direction: "upload" | "download"; paths: string[]; names: string[]; destination: string } | null>(null);
+  let properties = $state<{ side: Side; entry: FileEntry } | null>(null);
+  let editing = $state<FileEntry | null>(null);
 
   const host = $derived(data.hosts.find((h) => h.id === tab.hostId));
   const ready = $derived(tab.status === "connected" && !!sftpId);
   const myTransfers = $derived(transfers.filter((tr) => tr.sftpId === sftpId));
+  const editConflict = $derived(externalEdits.find((x) => x.sftpId === sftpId && x.status === "conflict"));
 
   // ── Chargement des listes ──
 
@@ -241,6 +248,7 @@
         run(() => api.localTrash(entries.map((e) => e.path)), () => loadLocal(), t("sftp.movedToTrash"))}
       onsend={(entries) => transfer("upload", entries.map((e) => e.path))}
       ondrop={(paths) => transfer("download", paths)}
+      onproperties={(entry) => (properties = { side: "local", entry })}
     />
 
     {#if ready || remote.entries.length}
@@ -264,6 +272,9 @@
           run(() => api.sftpDelete(sftpId!, entries.map((e) => e.path)), () => loadRemote(), t("sftp.deleted"))}
         onsend={(entries) => transfer("download", entries.map((e) => e.path))}
         ondrop={(paths) => transfer("upload", paths)}
+        onproperties={(entry) => (properties = { side: "remote", entry })}
+        onedit={(entry) => (editing = entry)}
+        onopenexternal={(entry) => sftpId && openExternal(sftpId, entry.path)}
       />
     {:else}
       <div class="placeholder">
@@ -318,6 +329,38 @@
 </div>
 
 <SessionPrompts bind:this={prompts} bind:active={promptActive} {tab} {visible} />
+
+{#if visible && properties}
+  {@const p = properties}
+  <PropertiesDialog
+    entry={p.entry}
+    load={() => (p.side === "remote" ? api.sftpStat(sftpId!, p.entry.path) : api.localStat(p.entry.path))}
+    canChmod={p.side === "remote" ? ready : !IS_WINDOWS}
+    onchmod={async (mode) => {
+      if (p.side === "remote") await api.sftpChmod(sftpId!, p.entry.path, mode);
+      else await api.localChmod(p.entry.path, mode);
+      toast(t("props.applied"), "success");
+      if (p.side === "remote") loadRemote();
+      else loadLocal();
+    }}
+    onclose={() => (properties = null)}
+  />
+{/if}
+
+{#if visible && editing && sftpId}
+  <TextEditor {sftpId} path={editing.path} name={editing.name} onclose={() => (editing = null)} />
+{/if}
+
+{#if visible && editConflict}
+  {@const ed = editConflict}
+  <ConfirmDialog
+    title={t("editor.conflictTitle")}
+    message={t("editor.externalConflictMessage", { name: displayName(ed.name) })}
+    confirmLabel={t("editor.overwrite")}
+    onconfirm={() => overwriteExternal(ed.id)}
+    onclose={() => stopExternal(ed.id)}
+  />
+{/if}
 
 {#if visible && conflict}
   {@const c = conflict}

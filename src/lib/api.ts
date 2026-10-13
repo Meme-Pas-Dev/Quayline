@@ -193,7 +193,35 @@ export interface FileEntry {
   size: number;
   modified: number | null;
   permissions: string | null;
+  /** Bits de permission (`0o7777`). */
+  mode: number | null;
+  owner: string | null;
+  group: string | null;
 }
+
+/** Date de modification et taille d'un fichier distant, comparées avant l'envoi. */
+export interface RemoteVersion {
+  modified: number | null;
+  size: number;
+}
+
+export interface TextEncoding {
+  charset: "utf-8" | "utf-16le" | "utf-16be" | "windows-1252";
+  bom: boolean;
+}
+
+export interface RemoteText {
+  content: string;
+  version: RemoteVersion;
+  encoding: TextEncoding;
+}
+
+export type EditEvent =
+  | { kind: "opened"; id: string; sftpId: string; name: string; remote: string }
+  | { kind: "synced"; id: string }
+  | { kind: "conflict"; id: string }
+  | { kind: "failed"; id: string; message: string }
+  | { kind: "closed"; id: string };
 
 export type TransferEvent =
   | { type: "started"; id: string; sftpId: string; direction: "upload" | "download"; name: string; destination: string }
@@ -342,6 +370,22 @@ export const api = {
   localMkdir: (dir: string, name: string) => invoke<void>("local_mkdir", { dir, name }),
   localRename: (path: string, newName: string) => invoke<void>("local_rename", { path, newName }),
   localTrash: (paths: string[]) => invoke<void>("local_trash", { paths }),
+  sftpStat: (sftpId: string, path: string) => invoke<FileEntry>("sftp_stat", { sftpId, path }),
+  sftpChmod: (sftpId: string, path: string, mode: number) => invoke<void>("sftp_chmod", { sftpId, path, mode }),
+  localStat: (path: string) => invoke<FileEntry>("local_stat", { path }),
+  localChmod: (path: string, mode: number) => invoke<void>("local_chmod", { path, mode }),
+  sftpReadText: (sftpId: string, path: string) => invoke<RemoteText>("sftp_read_text", { sftpId, path }),
+  /** `expected` null : remplacement forcé (après un conflit). */
+  sftpWriteText: (sftpId: string, path: string, content: string, encoding: TextEncoding, expected: RemoteVersion | null) =>
+    invoke<RemoteVersion>("sftp_write_text", { sftpId, path, content, encoding, expected }),
+  editsSubscribe: (onEvent: (e: EditEvent) => void) => {
+    const events = new Channel<EditEvent>();
+    events.onmessage = onEvent;
+    return invoke<void>("edits_subscribe", { events });
+  },
+  sftpOpenExternal: (sftpId: string, path: string) => invoke<string>("sftp_open_external", { sftpId, path }),
+  editExternalOverwrite: (id: string) => invoke<void>("edit_external_overwrite", { id }),
+  editExternalStop: (id: string) => invoke<void>("edit_external_stop", { id }),
   transfersSubscribe: (onEvent: (e: TransferEvent) => void) => {
     const events = new Channel<TransferEvent>();
     events.onmessage = onEvent;

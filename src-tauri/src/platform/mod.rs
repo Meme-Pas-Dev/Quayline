@@ -12,7 +12,7 @@
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
-pub use linux::{hardening, keyring, session};
+pub use linux::{hardening, keyring, portal, session};
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -48,4 +48,28 @@ pub enum SystemEvent {
     SessionLocked,
     /// La machine va se mettre en veille ou en hibernation.
     Suspending,
+}
+
+/// Nom du compte (utilisateur, ou groupe si `group`) d'un numéro Unix ; le numéro
+/// lui-même si le système ne le connaît pas.
+#[cfg(unix)]
+pub fn account_name(id: u32, group: bool) -> String {
+    use std::ffi::CStr;
+    let mut buf = vec![0 as libc::c_char; 4096];
+    // SAFETY : tampons et structures valides pendant l'appel ; le pointeur renvoyé
+    // dans `result` désigne `entry`, lue seulement si l'appel réussit.
+    let name = unsafe {
+        if group {
+            let mut entry: libc::group = std::mem::zeroed();
+            let mut result = std::ptr::null_mut();
+            let rc = libc::getgrgid_r(id, &mut entry, buf.as_mut_ptr(), buf.len(), &mut result);
+            (rc == 0 && !result.is_null()).then(|| CStr::from_ptr(entry.gr_name).to_string_lossy().into_owned())
+        } else {
+            let mut entry: libc::passwd = std::mem::zeroed();
+            let mut result = std::ptr::null_mut();
+            let rc = libc::getpwuid_r(id, &mut entry, buf.as_mut_ptr(), buf.len(), &mut result);
+            (rc == 0 && !result.is_null()).then(|| CStr::from_ptr(entry.pw_name).to_string_lossy().into_owned())
+        }
+    };
+    name.unwrap_or_else(|| id.to_string())
 }

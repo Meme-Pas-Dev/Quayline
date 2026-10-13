@@ -13,7 +13,9 @@ The interface is available in English and French (Settings → General → Langu
 ### Features
 
 - **Tabbed SSH terminal** and dual-pane **SFTP browser** (drag and drop, background
-  transfers); each one opens from the other.
+  transfers, permissions); each one opens from the other. Remote files can be edited in
+  a built-in editor or in the system's default application, changes being sent back to
+  the server.
 - **Encrypted vault** for servers, passwords and SSH keys, with encrypted export and
   import for backups or moving to another computer.
 - **Unlocking** with the master password, a **FIDO2 security key** (YubiKey,
@@ -196,7 +198,9 @@ L'interface est en français et en anglais (Réglages → Général → Langue).
 ### Fonctionnalités
 
 - **Terminal SSH** à onglets, **explorateur SFTP** en double panneau (glisser-déposer,
-  transferts en arrière-plan), ouverture de l'un depuis l'autre.
+  transferts en arrière-plan, permissions), ouverture de l'un depuis l'autre. Les
+  fichiers distants se modifient dans un éditeur intégré ou dans l'application par
+  défaut du système, les changements étant renvoyés au serveur.
 - **Coffre chiffré** pour les serveurs, mots de passe et clés SSH, avec export et import
   chiffrés pour la sauvegarde ou le passage à un autre ordinateur.
 - **Déverrouillage** par mot de passe maître, par **clé de sécurité FIDO2** (YubiKey,

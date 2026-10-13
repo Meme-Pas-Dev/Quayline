@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-edit-external-stop"
+description = "Enables the edit_external_stop command without any pre-configured scope."
+commands.allow = ["edit_external_stop"]
+
+[[permission]]
+identifier = "deny-edit-external-stop"
+description = "Denies the edit_external_stop command without any pre-configured scope."
+commands.deny = ["edit_external_stop"]

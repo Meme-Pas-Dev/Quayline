@@ -6,6 +6,68 @@ used as the text of its GitHub release.
 Chaque version est décrite en anglais, puis en français. La section d'une version sert
 de texte à sa release GitHub.
 
+## [1.9.0] - 2026-10-13
+
+### English
+
+**Added**
+- SFTP browser: optional “Permissions” column, and a “Properties” window (right-click):
+  path, size, date, owner and group, permissions as letters and in octal. Permissions
+  can be changed there, on the server and on Linux and macOS for local files.
+- Editing remote files: “Edit” opens a text file in a built-in editor (search, undo,
+  `Ctrl+S` / `Cmd+S`, syntax highlighting for shell, YAML, JSON, INI and systemd,
+  nginx, Dockerfile, PowerShell, Python, SQL, Markdown, XML/HTML and more); nothing is
+  written to the local disk. Files are recognised by their content, whatever their
+  extension (`.sh`, `.log`, `.bat`, `/etc/hosts`…), in UTF-8, UTF-16 or Windows-1252,
+  and saved back in their original encoding. “Open with the default
+  application” opens any file in the system application and sends each save to the
+  server; the local copy is kept in a private folder and deleted when the file is
+  opened again, when the SFTP session is closed, when Quayline locks or quits. Nothing
+  to stop by hand: a notification confirms each save, and a conflict asks before
+  replacing. It also works in the Flatpak (the chosen application may save the file),
+  and on macOS TextEdit keeps the file's encoding.
+- Before sending, Quayline checks that the file was not modified on the server in the
+  meantime, and asks before replacing it. The file is replaced through a temporary file
+  renamed into place, keeping its permissions.
+- `scripts/manage.sh` (Fedora): the Flatpak can now be compiled from the clone
+  (flatpak-builder), like the RPM, without waiting for a release.
+
+**Fixed**
+- SFTP browser: opening a file's menu now closes the one open in the other pane, and
+  the menu moves to the left of or above the cursor instead of being cut off at the
+  edge of the window.
+
+### Français
+
+**Ajouté**
+- Explorateur SFTP : colonne « Permissions » facultative, et fenêtre « Propriétés »
+  (clic droit) : chemin, taille, date, propriétaire et groupe, permissions en lettres et
+  en octal. Les permissions s'y modifient, sur le serveur, et sous Linux et macOS pour
+  les fichiers locaux.
+- Modification des fichiers distants : « Modifier » ouvre un fichier texte dans un
+  éditeur intégré (recherche, annulation, `Ctrl+S` / `Cmd+S`, coloration syntaxique pour
+  shell, YAML, JSON, INI et systemd, nginx, Dockerfile, PowerShell, Python, SQL,
+  Markdown, XML/HTML et d'autres) ; rien n'est écrit sur le disque local. Les fichiers
+  sont reconnus à leur contenu, quelle que soit leur extension (`.sh`, `.log`, `.bat`,
+  `/etc/hosts`…), en UTF-8, UTF-16 ou Windows-1252, et réenregistrés dans leur encodage
+  d'origine. « Ouvrir avec l'application par défaut » ouvre n'importe quel fichier
+  dans l'application du système et envoie chaque enregistrement au serveur ; la copie
+  locale est gardée dans un dossier privé et supprimée quand le fichier est rouvert, à
+  la fermeture de la session SFTP, au verrouillage et à la fermeture de Quayline. Rien
+  à arrêter à la main : une notification confirme chaque envoi, et un conflit est
+  soumis avant remplacement. Fonctionne aussi dans le Flatpak (l'application choisie
+  peut enregistrer le fichier), et sous macOS TextEdit garde l'encodage du fichier.
+- Avant l'envoi, Quayline vérifie que le fichier n'a pas été modifié sur le serveur
+  entre-temps, et demande avant de le remplacer. Le fichier est remplacé par un fichier
+  temporaire renommé, en gardant ses permissions.
+- `scripts/manage.sh` (Fedora) : le Flatpak peut maintenant être compilé depuis le
+  clone (flatpak-builder), comme le RPM, sans attendre une release.
+
+**Corrigé**
+- Explorateur SFTP : ouvrir le menu d'un fichier ferme celui resté ouvert dans l'autre
+  panneau, et le menu s'affiche à gauche ou au-dessus du curseur au lieu d'être coupé au
+  bord de la fenêtre.
+
 ## [1.8.3] - 2026-10-13
 
 ### English

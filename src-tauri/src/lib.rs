@@ -9,9 +9,11 @@ mod identity;
 mod oidc;
 mod platform;
 mod sftp;
+mod sftp_edit;
 mod ssh;
 mod state;
 mod text;
+mod text_encoding;
 mod updates;
 
 use std::time::Duration;
@@ -60,6 +62,7 @@ fn lock_now(handle: &AppHandle, reason: &str) {
     let close_sessions = state.lock_closes_sessions();
     state.lock();
     clipboard::clear_now(handle);
+    handle.state::<sftp_edit::EditManager>().stop_all();
     if close_sessions {
         handle.state::<ssh::SshManager>().close_all();
         handle.state::<sftp::SftpManager>().close_all();
@@ -103,6 +106,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(ssh::SshManager::default())
         .manage(sftp::SftpManager::default())
+        .manage(sftp_edit::EditManager::default())
         .manage(oidc::OidcState::default())
         .manage(clipboard::SecretClipboard::default())
         .manage(updates::UpdateState::default())
@@ -123,6 +127,7 @@ pub fn run() {
                 });
             }
             app.manage(AppState::new(dir.join(VAULT_FILE)));
+            sftp_edit::purge_leftovers(app.handle());
 
             // Verrouillage automatique après inactivité.
             let handle = app.handle().clone();
@@ -132,6 +137,7 @@ pub fn run() {
                     tick.tick().await;
                     if let Some(close_sessions) = handle.state::<AppState>().auto_lock_if_idle() {
                         clipboard::clear_now(&handle);
+                        handle.state::<sftp_edit::EditManager>().stop_all();
                         if close_sessions {
                             handle.state::<ssh::SshManager>().close_all();
                             handle.state::<sftp::SftpManager>().close_all();
@@ -198,6 +204,16 @@ pub fn run() {
             sftp::sftp_mkdir,
             sftp::sftp_rename,
             sftp::sftp_delete,
+            sftp::sftp_stat,
+            sftp::sftp_chmod,
+            sftp::local_stat,
+            sftp::local_chmod,
+            sftp_edit::sftp_read_text,
+            sftp_edit::sftp_write_text,
+            sftp_edit::edits_subscribe,
+            sftp_edit::sftp_open_external,
+            sftp_edit::edit_external_overwrite,
+            sftp_edit::edit_external_stop,
             sftp::local_home,
             sftp::local_list,
             sftp::local_realpath,
@@ -227,8 +243,10 @@ pub fn run() {
         .expect("erreur au lancement de l'application")
         .run(|app, event| {
             // Ne laisse pas de mot de passe dans le presse-papiers en quittant.
+            // Ni copie locale d'un fichier distant en cours de modification.
             if let tauri::RunEvent::Exit = event {
                 clipboard::clear_now(app);
+                app.state::<sftp_edit::EditManager>().stop_all();
             }
         });
 }

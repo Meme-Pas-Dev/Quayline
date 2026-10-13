@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-edit-external-overwrite"
+description = "Enables the edit_external_overwrite command without any pre-configured scope."
+commands.allow = ["edit_external_overwrite"]
+
+[[permission]]
+identifier = "deny-edit-external-overwrite"
+description = "Denies the edit_external_overwrite command without any pre-configured scope."
+commands.deny = ["edit_external_overwrite"]

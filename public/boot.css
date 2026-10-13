@@ -1,0 +1,16 @@
+/* Fond appliqué avant le chargement de la feuille de style principale : évite un flash
+   blanc. Fichier séparé et non bloc <style> dans index.html : un style en ligne ferait
+   ajouter par Tauri un nonce à la CSP, qui désactiverait alors 'unsafe-inline' pour
+   les styles que l'éditeur de texte (CodeMirror) injecte. */
+html,
+body {
+  background: #0d0f14;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  html,
+  body {
+    background: #f4f5f9;
+    color-scheme: light;
+  }
+}

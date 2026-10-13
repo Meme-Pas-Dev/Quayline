@@ -121,6 +121,7 @@ pub fn vault_lock(
     }
     state.lock();
     crate::clipboard::clear_now(&app);
+    app.state::<crate::sftp_edit::EditManager>().stop_all();
 }
 
 #[tauri::command]
