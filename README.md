@@ -8,7 +8,7 @@ A security-focused SSH and SFTP client for Linux (Fedora, KDE Plasma and GNOME),
 macOS and Windows 11 (preview). Servers, credentials and keys are kept in an encrypted vault, on your machine
 only.
 
-The interface is available in English and French (Settings → Appearance → Language).
+The interface is available in English and French (Settings → General → Language).
 
 ### Features
 
@@ -19,11 +19,14 @@ The interface is available in English and French (Settings → Appearance → La
 - **Unlocking** with the master password, a **FIDO2 security key** (YubiKey,
   Nitrokey…) or an **OpenID Connect identity provider** (Pocket ID; Authentik,
   Authelia, Keycloak, Microsoft Entra ID and Google in beta), including from a phone
-  via a QR code.
+  via a QR code. The provider asks you to sign in again once a grace period has passed
+  (15 minutes by default, adjustable).
 - **Automatic lock** after inactivity, when the session or screen is locked, and
   before sleep.
 - **Host key** verification (blocking alert if it changes), password copy with
-  automatic clipboard clearing, light or dark theme.
+  automatic clipboard clearing (excluded from clipboard history), light or dark theme.
+- **Updates**: checking for a new version (asked once, can be turned off); on macOS,
+  installation from the app.
 
 ### Security
 
@@ -32,14 +35,21 @@ short:
 
 - **Vault**: master password → Argon2id (256 MiB, 3 passes) → key protecting a random
   data key → XChaCha20-Poly1305. Everything is encrypted, including the server list;
-  any tampering with the file is detected.
-- **Memory**: secrets are wiped after use, core dumps are disabled, the process cannot
-  be traced.
+  any tampering with the file is detected. Only what the lock screen needs stays
+  readable without the password: the identity provider's address and account name, and
+  the names given to security keys.
+- **Memory**: the data key and secrets are wiped when the vault is locked, core dumps
+  are disabled, the process cannot be traced.
+- **One copy at a time**: a second launch brings the open window to the front, and the
+  vault file is reserved for the copy that unlocked it: two copies cannot overwrite
+  each other's changes.
 - **Isolated interface**: no secret is ever sent back to the web interface; strict
   content security policy, no remote resources.
-- **Signed packages**: the RPM and the Flatpak come with checksums signed with the
-  project key ([packaging/signing-key.asc](packaging/signing-key.asc)); the macOS app is
-  signed and notarized by Apple.
+- **Signed packages**: the RPM, the Flatpak and the Windows installer come with
+  checksums signed with the project key
+  ([packaging/signing-key.asc](packaging/signing-key.asc)); COPR packages are signed by
+  Fedora's infrastructure; the macOS app is signed and notarized by Apple. Signing keys
+  are only available to builds of version tags.
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
@@ -51,7 +61,8 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 #### Fedora
 
 The simplest way is the COPR repository: packages built and signed by Fedora's
-infrastructure, updated with `dnf upgrade` or Discover.
+infrastructure, updated with the rest of the system (`sudo dnf upgrade`). Quayline does
+not appear in the Discover or GNOME Software catalog yet: install it from a terminal.
 
 ```bash
 sudo dnf copr enable matt-mpd/quayline
@@ -75,14 +86,17 @@ version and keeps the vault).
 
 The Flatpak is checked the same way with `SHA256SUMS.flatpak` and
 `SHA256SUMS.flatpak.asc`, then installed with `flatpak install --user ./quayline.flatpak`
-(GNOME runtime from Flathub). Its vault is stored in `~/.var/app/dev.memepas.quayline/`.
+(GNOME runtime from Flathub). It is not updated automatically: the app announces new
+versions, to install the same way (Flathub is planned). Its vault is stored in
+`~/.var/app/dev.memepas.quayline/`.
 
 #### macOS (Apple Silicon)
 
 Download `Quayline-X.Y.Z-macos-arm64.dmg` from the
 [releases](https://github.com/Meme-Pas-Dev/Quayline/releases), then drag Quayline into
-Applications. The app is signed (Developer ID) and notarized by Apple. The vault is
-stored in `~/Library/Application Support/dev.memepas.quayline/`.
+Applications. The app is signed (Developer ID) and notarized by Apple, and installs
+its updates itself once you agree. The vault is stored in
+`~/Library/Application Support/dev.memepas.quayline/`.
 
 #### Windows 11 (preview)
 
@@ -102,12 +116,15 @@ vault is stored in `%APPDATA%\dev.memepas.quayline\`.
 
 ### Usage
 
-- **Identity provider unlock**: Settings → Identity provider (OIDC). The instructions
-  adapt to the chosen provider; the master password remains valid at all times.
-- **FIDO2 security keys**: Settings → Security keys → Add a key. No secret is stored:
+- **Identity provider unlock**: Settings → Security → Identity provider (OIDC). The
+  instructions adapt to the chosen provider; the master password remains valid at all
+  times.
+- **FIDO2 security keys**: Settings → Security → Security keys → Add a key. No secret is stored:
   the key recomputes it at each unlock. Register a second key as a backup.
+- **Backup**: Settings → Data → Backup and transfer (encrypted export and import).
 - **Shortcuts**: `Ctrl+Shift+L` (`Cmd+Shift+L` on macOS) locks;
-  `Ctrl+Shift+C` / `Ctrl+Shift+V` copy and paste in the terminal. Right-click a session
+  `Ctrl+Shift+C` / `Ctrl+Shift+V` (`Cmd+C` / `Cmd+V` on macOS) copy and paste in the
+  terminal. Right-click a session
   or a server for other actions.
 
 ### Build
@@ -116,7 +133,7 @@ vault is stored in `%APPDATA%\dev.memepas.quayline\`.
 # Fedora: system dependencies
 sudo dnf install webkit2gtk4.1-devel openssl-devel librsvg2-devel systemd-devel nodejs
 sudo dnf group install c-development
-# Rust: https://rustup.rs
+# Rust 1.90 or later: https://rustup.rs
 
 npm ci
 npm run tauri dev                      # development run
@@ -174,7 +191,7 @@ Client SSH et SFTP pour Linux (Fedora, KDE Plasma et GNOME), macOS et Windows 11
 (préversion), pensé pour la sécurité. Serveurs, identifiants et clés sont rangés dans un coffre chiffré, sur votre
 machine uniquement.
 
-L'interface est en français et en anglais (Réglages → Apparence → Langue).
+L'interface est en français et en anglais (Réglages → Général → Langue).
 
 ### Fonctionnalités
 
@@ -185,11 +202,15 @@ L'interface est en français et en anglais (Réglages → Apparence → Langue).
 - **Déverrouillage** par mot de passe maître, par **clé de sécurité FIDO2** (YubiKey,
   Nitrokey…) ou par un **fournisseur d'identité OpenID Connect** (Pocket ID ; Authentik,
   Authelia, Keycloak, Microsoft Entra ID et Google en bêta), y compris depuis un
-  téléphone par QR code.
+  téléphone par QR code. Le fournisseur redemande de se connecter passé un délai de
+  grâce (15 minutes par défaut, réglable).
 - **Verrouillage automatique** après inactivité, au verrouillage de la session ou de
   l'écran, avant la mise en veille.
 - Vérification des **clés d'hôte** (alerte bloquante si elle change), copie des mots de
-  passe avec effacement automatique du presse-papiers, thème clair ou sombre.
+  passe avec effacement automatique du presse-papiers (exclue de l'historique du
+  presse-papiers), thème clair ou sombre.
+- **Mises à jour** : recherche d'une nouvelle version (question posée une fois,
+  désactivable) ; sur macOS, installation depuis l'application.
 
 ### Sécurité
 
@@ -197,14 +218,21 @@ Le modèle complet est décrit dans [docs/securite.md](docs/securite.md). En bre
 
 - **Coffre** : mot de passe maître → Argon2id (256 Mio, 3 passes) → clé qui protège une
   clé de données aléatoire → XChaCha20-Poly1305. Tout est chiffré, y compris la liste des
-  serveurs ; toute altération du fichier est détectée.
-- **Mémoire** : secrets effacés après usage, core dumps désactivés, processus non
-  traçable.
+  serveurs ; toute altération du fichier est détectée. Seul ce dont l'écran de
+  verrouillage a besoin reste lisible sans le mot de passe : l'adresse et le nom du compte
+  du fournisseur d'identité, et les noms donnés aux clés de sécurité.
+- **Mémoire** : clé de données et secrets effacés au verrouillage du coffre, core dumps
+  désactivés, processus non traçable.
+- **Une seule copie à la fois** : un second lancement ramène la fenêtre ouverte au
+  premier plan, et le fichier du coffre est réservé à la copie qui l'a déverrouillé :
+  deux copies ne peuvent pas écraser les modifications l'une de l'autre.
 - **Interface isolée** : aucun secret ne repart vers l'interface web ; politique de
   sécurité stricte, aucune ressource distante.
-- **Paquets signés** : le RPM et le Flatpak sont accompagnés d'empreintes signées avec la
-  clé du projet ([packaging/signing-key.asc](packaging/signing-key.asc)) ; l'application
-  macOS est signée et notarisée par Apple.
+- **Paquets signés** : le RPM, le Flatpak et l'installateur Windows sont accompagnés
+  d'empreintes signées avec la clé du projet
+  ([packaging/signing-key.asc](packaging/signing-key.asc)) ; les paquets COPR sont signés
+  par l'infrastructure de Fedora ; l'application macOS est signée et notarisée par Apple.
+  Les clés de signature ne sont accessibles qu'aux builds des étiquettes de version.
 
 Pour signaler une faille : voir [SECURITY.md](SECURITY.md).
 
@@ -216,7 +244,9 @@ Pour signaler une faille : voir [SECURITY.md](SECURITY.md).
 #### Fedora
 
 Le plus simple est le dépôt COPR : paquets compilés et signés par l'infrastructure de
-Fedora, mis à jour avec `dnf upgrade` ou Discover.
+Fedora, mis à jour avec le reste du système (`sudo dnf upgrade`). Quayline n'apparaît
+pas encore dans le catalogue de Discover ni de GNOME Logiciels : l'installer depuis un
+terminal.
 
 ```bash
 sudo dnf copr enable matt-mpd/quayline
@@ -240,14 +270,16 @@ l'ancienne version et garde le coffre).
 
 Le Flatpak se vérifie de la même façon avec `SHA256SUMS.flatpak` et
 `SHA256SUMS.flatpak.asc`, puis s'installe avec `flatpak install --user ./quayline.flatpak`
-(runtime GNOME de Flathub). Son coffre est rangé dans `~/.var/app/dev.memepas.quayline/`.
+(runtime GNOME de Flathub). Il ne se met pas à jour tout seul : l'application annonce
+les nouvelles versions, à installer de la même façon (Flathub est prévu). Son coffre est
+rangé dans `~/.var/app/dev.memepas.quayline/`.
 
 #### macOS (Apple Silicon)
 
 Télécharger `Quayline-X.Y.Z-macos-arm64.dmg` dans les [releases](https://github.com/Meme-Pas-Dev/Quayline/releases), puis
 glisser Quayline dans Applications. L'application est signée (Developer ID) et
-notarisée par Apple. Le coffre est rangé dans
-`~/Library/Application Support/dev.memepas.quayline/`.
+notarisée par Apple, et installe elle-même ses mises à jour après votre accord. Le
+coffre est rangé dans `~/Library/Application Support/dev.memepas.quayline/`.
 
 #### Windows 11 (préversion)
 
@@ -268,14 +300,17 @@ PIN, toucher). Le coffre est rangé dans `%APPDATA%\dev.memepas.quayline\`.
 
 ### Utilisation
 
-- **Déverrouillage par fournisseur d'identité** : Réglages → Fournisseur d'identité
-  (OIDC). La marche à suivre s'adapte au fournisseur choisi ; le mot de passe maître
-  reste valable à tout moment.
-- **Clés de sécurité FIDO2** : Réglages → Clés de sécurité → Ajouter une clé. Aucun
+- **Déverrouillage par fournisseur d'identité** : Réglages → Sécurité → Fournisseur
+  d'identité (OIDC). La marche à suivre s'adapte au fournisseur choisi ; le mot de passe
+  maître reste valable à tout moment.
+- **Clés de sécurité FIDO2** : Réglages → Sécurité → Clés de sécurité → Ajouter une clé. Aucun
   secret n'est stocké : il est recalculé par la clé à chaque déverrouillage.
   Enregistrez une seconde clé en secours.
+- **Sauvegarde** : Réglages → Données → Sauvegarde et transfert (export et import
+  chiffrés).
 - **Raccourcis** : `Ctrl+Maj+L` (`Cmd+Maj+L` sur macOS) verrouille ;
-  `Ctrl+Maj+C` / `Ctrl+Maj+V` copient et collent dans le terminal. Clic droit sur une
+  `Ctrl+Maj+C` / `Ctrl+Maj+V` (`Cmd+C` / `Cmd+V` sur macOS) copient et collent dans le
+  terminal. Clic droit sur une
   session ou un serveur pour les autres actions.
 
 ### Compiler
@@ -284,7 +319,7 @@ PIN, toucher). Le coffre est rangé dans `%APPDATA%\dev.memepas.quayline\`.
 # Fedora : dépendances système
 sudo dnf install webkit2gtk4.1-devel openssl-devel librsvg2-devel systemd-devel nodejs
 sudo dnf group install c-development
-# Rust : https://rustup.rs
+# Rust 1.90 ou plus récent : https://rustup.rs
 
 npm ci
 npm run tauri dev                      # lancement en développement

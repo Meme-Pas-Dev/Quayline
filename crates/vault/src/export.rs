@@ -180,6 +180,81 @@ pub struct ImportPreview {
     pub known_hosts: Counts,
     pub known_hosts_identical: usize,
     pub settings: bool,
+    /// Clés d'hôte qui seraient approuvées (nouvelles ou différentes) : affichées avant
+    /// l'import, un fichier fabriqué pouvant pré-approuver la clé d'un attaquant.
+    pub host_keys: Vec<HostKeyChange>,
+    /// Réglages de sécurité que le fichier modifierait.
+    pub security_changes: Vec<SettingChange>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostKeyChange {
+    pub hostname: String,
+    pub port: u16,
+    pub algorithm: String,
+    pub fingerprint: String,
+    /// Remplacerait une clé différente déjà approuvée pour ce serveur.
+    pub replaces: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingChange {
+    /// `autoLockMinutes`, `clipboardClearSeconds`, `lockClosesSessions`,
+    /// `lockOnSystemEvents` ou `oidcReauthMinutes`.
+    pub setting: &'static str,
+    pub current: serde_json::Value,
+    pub imported: serde_json::Value,
+    /// Moins protecteur que la valeur actuelle.
+    pub weaker: bool,
+}
+
+/// Réglages de sécurité modifiés par `imported` (dans l'ordre de l'écran des réglages).
+pub fn security_changes(current: &Settings, imported: &Settings) -> Vec<SettingChange> {
+    // Délai : 0 = jamais, donc le moins protecteur.
+    fn weaker_delay(current: u32, imported: u32) -> bool {
+        imported != current && (imported == 0 || (current != 0 && imported > current))
+    }
+    let mut out = Vec::new();
+    let mut push = |setting, current: serde_json::Value, imported: serde_json::Value, weaker| {
+        if current != imported {
+            out.push(SettingChange { setting, current, imported, weaker });
+        }
+    };
+    push(
+        "autoLockMinutes",
+        current.auto_lock_minutes.into(),
+        imported.auto_lock_minutes.into(),
+        weaker_delay(current.auto_lock_minutes, imported.auto_lock_minutes),
+    );
+    push(
+        "lockOnSystemEvents",
+        current.lock_on_system_events.into(),
+        imported.lock_on_system_events.into(),
+        current.lock_on_system_events && !imported.lock_on_system_events,
+    );
+    push(
+        "lockClosesSessions",
+        current.lock_closes_sessions.into(),
+        imported.lock_closes_sessions.into(),
+        current.lock_closes_sessions && !imported.lock_closes_sessions,
+    );
+    push(
+        "oidcReauthMinutes",
+        current.oidc_reauth_minutes.into(),
+        imported.oidc_reauth_minutes.into(),
+        // 0 = nouvelle connexion à chaque déverrouillage : plus le délai est long,
+        // moins c'est protecteur.
+        imported.oidc_reauth_minutes > current.oidc_reauth_minutes,
+    );
+    push(
+        "clipboardClearSeconds",
+        current.clipboard_clear_seconds.into(),
+        imported.clipboard_clear_seconds.into(),
+        weaker_delay(current.clipboard_clear_seconds, imported.clipboard_clear_seconds),
+    );
+    out
 }
 
 /// Résultat d'un import.
@@ -223,6 +298,17 @@ pub fn preview(data: &VaultData, import: &ExportData) -> ImportPreview {
         },
         known_hosts_identical: import.known_hosts.len() - differing.len(),
         settings: import.settings.is_some(),
+        host_keys: differing
+            .iter()
+            .map(|k| HostKeyChange {
+                hostname: k.hostname.clone(),
+                port: k.port,
+                algorithm: k.algorithm.clone(),
+                fingerprint: k.fingerprint.clone(),
+                replaces: data.known_hosts.iter().any(|e| same_server(e, k)),
+            })
+            .collect(),
+        security_changes: import.settings.as_ref().map(|s| security_changes(&data.settings, s)).unwrap_or_default(),
     }
 }
 
@@ -236,6 +322,8 @@ fn suffixed(label: &str, suffix: &str, max_chars: usize) -> String {
 }
 
 /// Fusionne `import` dans `data`. Les données importées doivent avoir été validées.
+/// Les clés d'hôte ne sont reprises que si `import_known_hosts` (choix explicite de
+/// l'utilisateur après l'aperçu) ; sinon elles seront vérifiées à la première connexion.
 ///
 /// Les références des hôtes vers les identités suivent les décisions prises pour les
 /// identités (identité existante gardée, remplacée ou dupliquée) ; une référence vers
@@ -244,6 +332,7 @@ pub fn merge(
     data: &mut VaultData,
     import: ExportData,
     duplicates: Duplicates,
+    import_known_hosts: bool,
     import_settings: bool,
     max_label: usize,
     suffix: &str,
@@ -308,7 +397,7 @@ pub fn merge(
         }
     }
 
-    for known in import.known_hosts {
+    for known in import.known_hosts.into_iter().filter(|_| import_known_hosts) {
         match data.known_hosts.iter().position(|e| same_server(e, &known)) {
             Some(i) if data.known_hosts[i].public_key == known.public_key => report.skipped += 1,
             Some(i) if duplicates == Duplicates::Replace => {
@@ -391,6 +480,39 @@ mod tests {
     }
 
     #[test]
+    fn preview_lists_host_keys_and_weaker_settings() {
+        let mut data = VaultData::default();
+        data.known_hosts.push(known("db.example.org", "AAAA"));
+        let mut settings = Settings { auto_lock_minutes: 0, lock_closes_sessions: false, ..Settings::default() };
+        settings.terminal_font_size = 20;
+        let import = ExportData {
+            known_hosts: vec![known("db.example.org", "BBBB"), known("new.example.org", "CCCC")],
+            settings: Some(settings),
+            ..ExportData::from_vault(&VaultData::default(), ALL, 1, "")
+        };
+        let p = preview(&data, &import);
+        assert_eq!(p.host_keys.iter().map(|k| (k.hostname.as_str(), k.replaces)).collect::<Vec<_>>(),
+            [("db.example.org", true), ("new.example.org", false)]);
+        let changes: Vec<_> = p.security_changes.iter().map(|c| (c.setting, c.weaker)).collect();
+        assert_eq!(changes, [("autoLockMinutes", true), ("lockClosesSessions", true)], "taille de police ignorée");
+
+        // Sans accord explicite, aucune clé d'hôte n'est reprise.
+        let report = merge(&mut data, import, Duplicates::Replace, false, false, 100, SUFFIX);
+        assert_eq!(report.added + report.replaced, 0);
+        assert_eq!(data.known_hosts.len(), 1);
+        assert_eq!(data.known_hosts[0].public_key, "AAAA");
+    }
+
+    #[test]
+    fn stronger_delays_are_not_weaker() {
+        let current = Settings { auto_lock_minutes: 10, clipboard_clear_seconds: 0, ..Settings::default() };
+        let imported = Settings { auto_lock_minutes: 5, clipboard_clear_seconds: 30, ..Settings::default() };
+        assert!(security_changes(&current, &imported).iter().all(|c| !c.weaker));
+        let imported = Settings { auto_lock_minutes: 30, ..current.clone() };
+        assert!(security_changes(&current, &imported)[0].weaker);
+    }
+
+    #[test]
     fn round_trip() {
         let data = sample();
         let export = ExportData::from_vault(&data, ALL, 42, "1.2.1");
@@ -440,7 +562,7 @@ mod tests {
         let import = ExportData::from_vault(&source, ALL, 1, "");
         let p = preview(&target, &import);
         assert_eq!((p.hosts.new, p.identities.new, p.known_hosts.new), (2, 1, 1));
-        let report = merge(&mut target, import, Duplicates::Skip, true, 100, SUFFIX);
+        let report = merge(&mut target, import, Duplicates::Skip, true, true, 100, SUFFIX);
         assert_eq!(report, ImportReport { added: 4, replaced: 0, skipped: 0, settings: true });
         assert_eq!(target.hosts[0].identity_id, Some(target.identities[0].id));
         assert_eq!(target.settings.terminal_font_size, 18);
@@ -457,19 +579,19 @@ mod tests {
 
         let mut skip = source.clone();
         skip.hosts[0].notes = "local".into();
-        let r = merge(&mut skip, import(), Duplicates::Skip, false, 100, SUFFIX);
+        let r = merge(&mut skip, import(), Duplicates::Skip, true, false, 100, SUFFIX);
         assert_eq!((r.added, r.replaced, r.skipped), (0, 0, 4));
         assert_eq!(skip.hosts[0].notes, "local");
 
         let mut replace = source.clone();
         replace.hosts[0].notes = "local".into();
-        let r = merge(&mut replace, import(), Duplicates::Replace, false, 100, SUFFIX);
+        let r = merge(&mut replace, import(), Duplicates::Replace, true, false, 100, SUFFIX);
         assert_eq!((r.added, r.replaced, r.skipped), (0, 3, 1));
         assert_eq!(replace.hosts[0].notes, "");
         assert_eq!(replace.hosts.len(), 2);
 
         let mut both = source.clone();
-        let r = merge(&mut both, import(), Duplicates::KeepBoth, false, 100, SUFFIX);
+        let r = merge(&mut both, import(), Duplicates::KeepBoth, true, false, 100, SUFFIX);
         assert_eq!((r.added, r.skipped), (3, 1));
         assert_eq!(both.hosts.len(), 4);
         assert_eq!(both.identities.len(), 2);
@@ -488,7 +610,7 @@ mod tests {
         let mut id = identity("perso");
         id.password = Some(Secret::new("ancien-mot-de-passe"));
         other.identities.push(id.clone());
-        let r = merge(&mut other, ExportData::from_vault(&source, ALL, 1, ""), Duplicates::Skip, false, 100, SUFFIX);
+        let r = merge(&mut other, ExportData::from_vault(&source, ALL, 1, ""), Duplicates::Skip, true, false, 100, SUFFIX);
         assert_eq!(r.skipped, 1);
         // L'hôte importé est rattaché à l'identité existante.
         assert_eq!(other.hosts[0].identity_id, Some(id.id));
@@ -500,10 +622,10 @@ mod tests {
         let import = ExportData { known_hosts: vec![known("web.example.org", "NEW")], ..Default::default() };
         let p = preview(&data, &import);
         assert_eq!((p.known_hosts.duplicates, p.known_hosts_identical), (1, 0));
-        merge(&mut data, import.clone(), Duplicates::KeepBoth, false, 100, SUFFIX);
+        merge(&mut data, import.clone(), Duplicates::KeepBoth, true, false, 100, SUFFIX);
         assert_eq!(data.known_hosts.len(), 1);
         assert_eq!(data.known_hosts[0].public_key, "OLD");
-        merge(&mut data, import, Duplicates::Replace, false, 100, SUFFIX);
+        merge(&mut data, import, Duplicates::Replace, true, false, 100, SUFFIX);
         assert_eq!(data.known_hosts[0].public_key, "NEW");
     }
 

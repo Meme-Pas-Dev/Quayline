@@ -77,6 +77,8 @@ export interface Settings {
   lock_on_system_events: boolean;
   /** null : pas encore demandé. */
   check_updates: boolean | null;
+  /** Délai de grâce du fournisseur d'identité, en minutes ; 0 = à chaque déverrouillage. */
+  oidc_reauth_minutes: number;
 }
 
 export interface UpdateInfo {
@@ -109,6 +111,23 @@ export interface ImportPreview {
   knownHosts: ImportCounts;
   knownHostsIdentical: number;
   settings: boolean;
+  hostKeys: HostKeyChange[];
+  securityChanges: SettingChange[];
+}
+
+export interface HostKeyChange {
+  hostname: string;
+  port: number;
+  algorithm: string;
+  fingerprint: string;
+  replaces: boolean;
+}
+
+export interface SettingChange {
+  setting: "autoLockMinutes" | "clipboardClearSeconds" | "lockClosesSessions" | "lockOnSystemEvents" | "oidcReauthMinutes";
+  current: number | boolean;
+  imported: number | boolean;
+  weaker: boolean;
 }
 
 export type Duplicates = "skip" | "replace" | "keepBoth";
@@ -218,6 +237,8 @@ export interface OidcIdentity {
   name: string | null;
   email: string | null;
   groups: string[];
+  /** Le fournisseur n'indique pas l'heure de connexion (réauthentification non vérifiable). */
+  reauthUnverified: boolean;
 }
 
 export interface OidcEnrollInput {
@@ -263,8 +284,8 @@ export const api = {
     invoke<string | null>("vault_export", { password, passphrase, selection }),
   vaultImportPick: () => invoke<string | null>("vault_import_pick"),
   vaultImportPreview: (passphrase: string) => invoke<ImportPreview>("vault_import_preview", { passphrase }),
-  vaultImportApply: (duplicates: Duplicates, importSettings: boolean) =>
-    invoke<ImportReport>("vault_import_apply", { duplicates, importSettings }),
+  vaultImportApply: (duplicates: Duplicates, importKnownHosts: boolean, importSettings: boolean) =>
+    invoke<ImportReport>("vault_import_apply", { duplicates, importKnownHosts, importSettings }),
   vaultImportCancel: () => invoke<void>("vault_import_cancel"),
 
   hostsList: () => invoke<Host[]>("hosts_list"),

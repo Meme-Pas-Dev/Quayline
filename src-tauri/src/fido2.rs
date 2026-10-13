@@ -384,7 +384,7 @@ pub async fn fido2_set_pin(state: State<'_, AppState>, pin: Secret) -> CmdResult
     .await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fido2_remove(state: State<'_, AppState>, id: Uuid) -> CmdResult<()> {
     if state.with_vault_mut_nosave(|v| v.remove_fido2(id).map_err(Into::into))? {
         Ok(())

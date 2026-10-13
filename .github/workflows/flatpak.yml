@@ -2,7 +2,11 @@ name: Flatpak
 
 # Étiquettes de version : Flatpak de la release, construit uniquement dans le dépôt
 # public (minutes gratuites). Lancement manuel possible partout (onglet Actions →
-# Flatpak → Run workflow).
+# Flatpak → Run workflow) : empreinte non signée, rien n'est publié.
+#
+# Comme pour le RPM : la clé de signature (environnement « release », étiquettes v*)
+# n'est lue que par le job qui publie, sans le code du projet ; pas de cache de
+# compilation pour les étiquettes.
 on:
   push:
     tags: ["v*"]
@@ -54,27 +58,12 @@ jobs:
         with:
           manifest-path: flatpak/manifest.yml
           bundle: quayline.flatpak
+          cache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           cache-key: flatpak-gnome50-${{ hashFiles('Cargo.lock', 'package-lock.json') }}
           upload-artifact: false
 
-      # Même principe que pour le RPM : empreinte, signée si PACKAGE_SIGNING_KEY existe.
-      - name: Empreinte et signature
-        shell: bash
-        env:
-          SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
-        run: |
-          set -euo pipefail
-          sha256sum quayline.flatpak | tee SHA256SUMS.flatpak
-          if [[ -n ${SIGNING_KEY:-} ]]; then
-            command -v gpg >/dev/null || dnf install -y --setopt=install_weak_deps=False gnupg2
-            export GNUPGHOME=$(mktemp -d)
-            printf '%s\n' "$SIGNING_KEY" | gpg --batch --quiet --import
-            fpr=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ { print $10; exit }')
-            gpg --batch --yes --local-user "$fpr" --armor --detach-sign SHA256SUMS.flatpak
-            rm -rf "$GNUPGHOME"
-          else
-            echo "::warning::Secret PACKAGE_SIGNING_KEY absent : paquet non signé."
-          fi
+      - name: Empreinte
+        run: sha256sum quayline.flatpak | tee SHA256SUMS.flatpak
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -88,10 +77,11 @@ jobs:
   # workflow RPM (qui en est le seul créateur, pour éviter deux créations
   # simultanées) : on attend qu'elle existe, au plus 40 minutes.
   release:
-    name: Ajout à la release
+    name: Signature et ajout à la release
     if: startsWith(github.ref, 'refs/tags/v')
     needs: flatpak
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
     steps:
@@ -99,6 +89,23 @@ jobs:
         with:
           name: quayline-flatpak
           path: dist
+
+      - name: Signature de l'empreinte
+        working-directory: dist
+        env:
+          SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z ${SIGNING_KEY:-} ]]; then
+            echo "::error::Secret PACKAGE_SIGNING_KEY absent de l'environnement « release »."
+            exit 1
+          fi
+          export GNUPGHOME=$(mktemp -d)
+          trap 'rm -rf "$GNUPGHOME"' EXIT
+          printf '%s\n' "$SIGNING_KEY" | gpg --batch --quiet --import
+          fpr=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ { print $10; exit }')
+          sha256sum -c SHA256SUMS.flatpak
+          gpg --batch --yes --local-user "$fpr" --armor --detach-sign SHA256SUMS.flatpak
 
       - name: Ajout du Flatpak à la release
         env:

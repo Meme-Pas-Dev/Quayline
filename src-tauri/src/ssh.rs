@@ -266,6 +266,20 @@ impl Asker {
     }
 }
 
+/// Algorithmes de russh par défaut (pas de SHA-1 ni de CBC pour l'échange de clés, le
+/// chiffrement et l'intégrité), sans `ssh-rsa` pour la clé d'hôte : signature SHA-1,
+/// refusée par défaut par OpenSSH depuis la version 8.8. Les clés RSA restent
+/// acceptées avec `rsa-sha2-256` / `rsa-sha2-512`.
+fn preferred_algorithms() -> russh::Preferred {
+    let key = russh::Preferred::DEFAULT
+        .key
+        .iter()
+        .filter(|a| !matches!(a, russh::keys::Algorithm::Rsa { hash: None }))
+        .cloned()
+        .collect::<Vec<_>>();
+    russh::Preferred { key: key.into(), ..russh::Preferred::DEFAULT }
+}
+
 /// Ouvre une connexion SSH authentifiée : TCP, vérification de la clé d'hôte, puis
 /// authentification. `target` est consommé : ses secrets sont effacés de la mémoire
 /// (Secret: ZeroizeOnDrop) dès la fin de l'authentification.
@@ -277,6 +291,7 @@ pub(crate) async fn establish(asker: &Asker, target: Target) -> Result<client::H
         keepalive_interval: Some(Duration::from_secs(30)),
         keepalive_max: 3,
         nodelay: true,
+        preferred: preferred_algorithms(),
         ..Default::default()
     });
     // Le délai ne couvre que l'ouverture TCP : la vérification de l'empreinte par
@@ -304,6 +319,11 @@ pub(crate) async fn establish(asker: &Asker, target: Target) -> Result<client::H
     let handshake_and_auth = async {
         let mut session = match client::connect_stream(config, stream, handler).await {
             Ok(s) => s,
+            Err(russh::Error::NoCommonAlgo { kind: russh::AlgorithmKind::Key, theirs, .. })
+                if theirs.iter().any(|a| a == "ssh-rsa") =>
+            {
+                return Err(tr!("err.ssh.legacyHostKey", host = target.hostname, port = target.port));
+            }
             Err(e) => {
                 let reason = rejection.lock().unwrap_or_else(|p| p.into_inner()).take();
                 return Err(reason.unwrap_or_else(|| {
@@ -393,7 +413,7 @@ async fn run(
         }
     }
 
-    let _ = session.disconnect(Disconnect::ByApplication, "", "fr").await;
+    let _ = session.disconnect(Disconnect::ByApplication, "", crate::i18n::language()).await;
     Ok(())
 }
 
@@ -654,22 +674,23 @@ impl client::Handler for HostKeyVerifier {
 /// Réponse attendue pour remplacer une clé d'hôte qui a changé.
 const REPLACE_KEY_ANSWER: &str = "replace-host-key";
 
-/// Texte fourni par le serveur, rendu inoffensif pour l'affichage : sans caractères
-/// de contrôle (sauf saut de ligne) ni caractères d'inversion bidirectionnelle, et
-/// de longueur bornée.
+/// Texte fourni par le serveur, rendu inoffensif pour l'affichage (voir
+/// [`crate::text::neutralize`]).
 fn server_text(text: &str, max_chars: usize) -> String {
-    let cleaned: String = text
-        .chars()
-        .filter(|c| *c == '\n' || !c.is_control())
-        .filter(|c| !matches!(*c, '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'))
-        .take(max_chars)
-        .collect();
-    cleaned.trim().to_string()
+    crate::text::neutralize(text, max_chars)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sha1_host_keys_are_not_offered() {
+        let key = preferred_algorithms().key;
+        assert!(!key.iter().any(|a| matches!(a, russh::keys::Algorithm::Rsa { hash: None })));
+        assert!(key.iter().any(|a| matches!(a, russh::keys::Algorithm::Rsa { hash: Some(_) })));
+        assert!(key.contains(&russh::keys::Algorithm::Ed25519));
+    }
 
     fn block_on<F: std::future::Future>(f: F) -> F::Output {
         tauri::async_runtime::block_on(f)

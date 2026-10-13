@@ -173,8 +173,9 @@ fn mode_string(mode: u32) -> String {
     flags.iter().map(|&(bit, c)| if mode & bit != 0 { c } else { '-' }).collect()
 }
 
+/// Le détail vient du serveur (message d'état SFTP) : neutralisé.
 fn sftp_err(e: russh_sftp::client::error::Error) -> CmdError {
-    CmdError::new("sftp", tr!("err.sftp.generic", detail = e))
+    CmdError::new("sftp", tr!("err.sftp.generic", detail = crate::text::neutralize(&e.to_string(), 500)))
 }
 
 fn io_err(e: std::io::Error) -> CmdError {
@@ -462,7 +463,7 @@ pub async fn local_list(state: State<'_, AppState>, path: String) -> CmdResult<V
     .map_err(|_| CmdError::new("internal", tr!("err.interrupted")))?
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn local_realpath(state: State<'_, AppState>, path: String) -> CmdResult<String> {
     state.require_unlocked()?;
     if cfg!(windows) && path.is_empty() {
@@ -471,13 +472,13 @@ pub fn local_realpath(state: State<'_, AppState>, path: String) -> CmdResult<Str
     std::fs::canonicalize(path).map(|p| display_path(&p)).map_err(io_err)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn local_mkdir(state: State<'_, AppState>, dir: String, name: String) -> CmdResult<()> {
     state.require_unlocked()?;
     std::fs::create_dir(new_local_path(Path::new(&dir), &name)?).map_err(io_err)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn local_rename(state: State<'_, AppState>, path: String, new_name: String) -> CmdResult<()> {
     state.require_unlocked()?;
     let p = PathBuf::from(&path);
@@ -490,7 +491,7 @@ pub fn local_rename(state: State<'_, AppState>, path: String, new_name: String) 
 }
 
 /// Les fichiers locaux vont à la corbeille (récupérables), jamais supprimés définitivement.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn local_trash(state: State<'_, AppState>, paths: Vec<String>) -> CmdResult<()> {
     state.require_unlocked()?;
     trash::delete_all(&paths).map_err(|e| CmdError::new("io", tr!("err.sftp.trash", detail = e)))
@@ -620,7 +621,8 @@ fn start_transfers(
             let (error, cancelled) = match result {
                 Ok(()) => (None, false),
                 Err(e) if e == CANCELLED || job.cancelled() => (None, true),
-                Err(e) => (Some(e), false),
+                // Les messages reprennent des chemins et des textes du serveur.
+                Err(e) => (Some(crate::text::neutralize(&e, 1000)), false),
             };
             let mgr = app.state::<SftpManager>();
             mgr.transfers.lock().unwrap_or_else(|p| p.into_inner()).remove(&id);

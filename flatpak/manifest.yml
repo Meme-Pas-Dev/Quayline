@@ -45,7 +45,7 @@ modules:
         CARGO_PROFILE_RELEASE_DEBUG: "0"
         CARGO_INCREMENTAL: "0"
     build-commands:
-      - npm ci --no-audit --no-fund
+      - npm ci --ignore-scripts --no-audit --no-fund
       - npx tauri build --no-bundle -- --locked
       - install -Dm755 target/release/quayline /app/bin/quayline
       - >

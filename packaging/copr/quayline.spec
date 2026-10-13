@@ -38,7 +38,7 @@ password, a FIDO2 security key or an OpenID Connect identity provider.
 %autosetup
 
 %build
-npm ci --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 npx tauri build --no-bundle -- --locked
 
 %install

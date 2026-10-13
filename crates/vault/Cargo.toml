@@ -4,6 +4,7 @@ description = "Coffre-fort chiffré (Argon2id + XChaCha20-Poly1305)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 
 [dependencies]
 argon2 = { version = "0.5", features = ["zeroize"] }

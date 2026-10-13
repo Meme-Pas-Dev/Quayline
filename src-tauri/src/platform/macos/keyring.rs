@@ -10,6 +10,7 @@ use security_framework::passwords::{
 };
 use zeroize::Zeroizing;
 
+use crate::i18n::tr;
 use crate::identity;
 use crate::platform::SecretRef;
 
@@ -17,7 +18,7 @@ use crate::platform::SecretRef;
 const ITEM_NOT_FOUND: i32 = -25300;
 
 fn err(e: impl std::fmt::Display) -> String {
-    format!("Trousseau macOS indisponible ({e}).")
+    tr!("err.keyring.systemUnavailable", detail = e)
 }
 
 /// Échappe les séparateurs pour que deux `SecretRef` différents ne donnent jamais

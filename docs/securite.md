@@ -94,9 +94,19 @@ L'en-tête contient la version, les slots (paramètres KDF, sel, nonce, DEK emba
 et le nonce du contenu, renouvelé à chaque enregistrement. Les octets
 `magic | longueur | en-tête` servent de données associées au chiffrement du contenu.
 
+**L'en-tête est authentifié, pas confidentiel** : il doit être lisible avant le
+déverrouillage pour proposer les moyens disponibles. Un fichier de coffre dérobé révèle
+donc, sans mot de passe, pour le fournisseur d'identité : l'adresse de l'instance, le
+`client_id`, l'identifiant (`sub`) et le nom affiché du compte, le groupe exigé, le port
+de retour et, s'il y en a un, le secret client ; pour chaque clé FIDO2 : le nom choisi,
+le domaine (`rp_id`) et l'identifiant de la clé. Rien de cela ne permet d'ouvrir le
+coffre ; la liste des serveurs, les identifiants et les clés restent chiffrés. Piste
+envisagée : chiffrer le nom du compte et des clés avec la clé de données et n'afficher
+qu'un libellé générique avant le déverrouillage.
+
 ## Export et import
 
-Réglages → Sauvegarde et transfert. Le fichier (`.qlexport`) est chiffré par une phrase
+Réglages → Données → Sauvegarde et transfert. Le fichier (`.qlexport`) est chiffré par une phrase
 de passe propre à l'export (12 caractères minimum), indépendante du mot de passe maître :
 
 ```
@@ -176,6 +186,21 @@ la seule restriction.
 fournisseur » : quelqu'un qui contrôle déjà votre session (et donc votre trousseau)
 pourrait lire la clé sans passer par le fournisseur. Le mot de passe maître reste la
 racine, et le moyen de secours. Pour un facteur matériel qui ne dépend pas du trousseau, voir ci-dessous.
+
+**Authentification récente.** Hors délai de grâce, une session déjà ouverte chez le
+fournisseur ne suffit pas : la connexion par navigateur demande une nouvelle
+authentification (`prompt=login`, sauf Google qui ne l'accepte pas) datant de moins de
+5 minutes (`max_age=300`), et Quayline vérifie l'heure `auth_time` du jeton (marge d'une
+minute). **Délai de grâce** (réglage « Nouvelle connexion au fournisseur d'identité »,
+15 minutes par défaut, 0 à 60) : dans ce délai après la dernière connexion par le
+navigateur, la session du fournisseur suffit (un clic), avec `max_age` égal au délai.
+Le délai est compté depuis la dernière connexion réussie, en mémoire seulement : après
+un redémarrage de l'application, une nouvelle connexion est exigée. Compromis assumé :
+pendant ce délai, une personne devant le poste (session du bureau ouverte, Quayline
+verrouillé) peut déverrouiller en un clic ; « À chaque déverrouillage » le supprime.
+Un fournisseur qui n'envoie pas `auth_time` est accepté, mais l'activation le signale :
+la réauthentification n'est alors pas vérifiable. La connexion depuis un téléphone
+demande de toute façon une validation explicite sur le téléphone.
 
 ## Clés de sécurité FIDO2
 

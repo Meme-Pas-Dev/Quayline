@@ -438,13 +438,15 @@ impl Vault {
     /// Vérifie un mot de passe sans toucher à l'état courant (pour confirmer
     /// une action sensible, par exemple afficher un secret).
     pub fn verify_password(&self, password: &[u8]) -> Result<bool> {
-        for slot in &self.slots {
-            let SlotKind::Password { kdf, salt } = &slot.kind else { continue };
-            if slot.open(&*kdf.derive(password, salt)?).is_some() {
-                return Ok(true);
-            }
+        self.password_verifier().verify(password)
+    }
+
+    /// De quoi vérifier le mot de passe maître sans garder le coffre : la dérivation
+    /// (Argon2, environ une seconde) peut se faire hors du verrou de l'application.
+    pub fn password_verifier(&self) -> PasswordVerifier {
+        PasswordVerifier {
+            slots: self.slots.iter().filter(|s| matches!(s.kind, SlotKind::Password { .. })).cloned().collect(),
         }
-        Ok(false)
     }
 
     /// Remplace le mot de passe maître. La DEK et le contenu ne changent pas.
@@ -458,10 +460,13 @@ impl Vault {
         if !self.verify_password(current)? {
             return Err(Error::InvalidCredentials);
         }
-        check_password_policy(new)?;
-        let mut new_dek = Zeroizing::new([0u8; KEY_LEN]);
-        OsRng.fill_bytes(new_dek.as_mut());
-        let slot = password_slot(new, kdf, &new_dek)?;
+        self.apply_new_password(NewPassword::prepare(new, kdf)?)
+    }
+
+    /// Dernière étape de [`Vault::change_password`], rapide : le mot de passe actuel a
+    /// été vérifié et le nouveau dérivé ([`NewPassword::prepare`]) hors du verrou.
+    pub fn apply_new_password(&mut self, new: NewPassword) -> Result<()> {
+        let NewPassword { slot, dek: new_dek } = new;
         let previous_slots = std::mem::replace(&mut self.slots, vec![slot]);
         let previous_dek = std::mem::replace(&mut self.dek, new_dek);
         if let Err(e) = self.save() {
@@ -554,6 +559,40 @@ impl Vault {
             return Err(e);
         }
         Ok(true)
+    }
+}
+
+/// Slots « mot de passe » copiés depuis le coffre (voir [`Vault::password_verifier`]).
+pub struct PasswordVerifier {
+    slots: Vec<Slot>,
+}
+
+impl PasswordVerifier {
+    pub fn verify(&self, password: &[u8]) -> Result<bool> {
+        for slot in &self.slots {
+            let SlotKind::Password { kdf, salt } = &slot.kind else { continue };
+            if slot.open(&*kdf.derive(password, salt)?).is_some() {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
+/// Nouveau mot de passe maître et nouvelle clé de données, préparés (dérivation
+/// Argon2 comprise) sans accès au coffre.
+pub struct NewPassword {
+    slot: Slot,
+    dek: Zeroizing<[u8; KEY_LEN]>,
+}
+
+impl NewPassword {
+    pub fn prepare(password: &[u8], kdf: KdfParams) -> Result<Self> {
+        check_password_policy(password)?;
+        let mut dek = Zeroizing::new([0u8; KEY_LEN]);
+        OsRng.fill_bytes(dek.as_mut());
+        let slot = password_slot(password, kdf, &dek)?;
+        Ok(NewPassword { slot, dek })
     }
 }
 

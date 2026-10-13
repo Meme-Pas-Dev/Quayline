@@ -6,16 +6,66 @@ used as the text of its GitHub release.
 Chaque version est décrite en anglais, puis en français. La section d'une version sert
 de texte à sa release GitHub.
 
+## [1.8.3] - 2026-10-13
+
+### English
+
+**Security** (code audit, continued)
+- Unlocking with an identity provider in the browser now requires signing in again
+  once the grace period has passed (new setting “Sign in again to the identity
+  provider”: 15 minutes by default, or at every unlock); within it, one click is
+  enough, as before. If the provider does not report when you signed in, enabling it
+  shows a warning.
+- Importing a file: the host keys it contains are listed (server, type, fingerprint)
+  and approved only if you tick the box; otherwise each fingerprint is checked at the
+  first connection. Security settings the file would change are shown.
+- SSH: host keys signed with SHA-1 (“ssh-rsa”) are no longer accepted, as in OpenSSH;
+  a clear message explains it. RSA keys signed with SHA-2 still work.
+- Names, paths and messages sent by a server are cleaned of more invisible characters
+  that could disguise them, including in the file browser's path bar and in error
+  messages.
+
+**Changed**
+- The window no longer freezes while the master password is being checked, and saving
+  no longer blocks the interface.
+- Terminal menu and some messages translated; on macOS, system menu items follow the
+  system language.
+
+### Français
+
+**Sécurité** (audit du code, suite)
+- Le déverrouillage par fournisseur d'identité dans le navigateur demande désormais de
+  se reconnecter une fois le délai de grâce écoulé (nouveau réglage « Nouvelle
+  connexion au fournisseur d'identité » : 15 minutes par défaut, ou à chaque
+  déverrouillage) ; dans ce délai, un clic suffit, comme avant. Si le fournisseur
+  n'indique pas l'heure de connexion, son activation affiche un avertissement.
+- Import d'un fichier : les clés d'hôte qu'il contient sont listées (serveur, type,
+  empreinte) et approuvées seulement si vous cochez la case ; sinon chaque empreinte est
+  vérifiée à la première connexion. Les réglages de sécurité que le fichier modifierait
+  sont affichés.
+- SSH : les clés d'hôte signées en SHA-1 (« ssh-rsa ») ne sont plus acceptées, comme
+  dans OpenSSH ; un message clair l'explique. Les clés RSA signées en SHA-2 restent
+  utilisables.
+- Les noms, chemins et messages envoyés par un serveur sont débarrassés de davantage de
+  caractères invisibles qui pourraient les maquiller, y compris dans la barre de chemin
+  de l'explorateur et dans les messages d'erreur.
+
+**Modifié**
+- La fenêtre ne se fige plus pendant la vérification du mot de passe maître, et les
+  enregistrements ne bloquent plus l'interface.
+- Menu du terminal et quelques messages traduits ; sous macOS, les éléments de menu du
+  système suivent la langue du système.
+
 ## [1.8.2] - 2026-10-12
 
 ### English
 
 **Security** (fixes following a code audit)
 - Only one copy of the application runs at a time: launching it again brings the
-  existing window to the front. The vault is also locked while open, and a change is
-  no longer saved over a vault modified elsewhere in the meantime: two copies could
-  undo each other's changes, including a password change made after losing a
-  security key.
+  existing window to the front. The vault file is also reserved for the copy that
+  unlocked it, and a change is no longer saved over a vault modified elsewhere in the
+  meantime: two copies could undo each other's changes, including a password change
+  made after losing a security key.
 - Pasting into a terminal: control characters are removed from the pasted text. A
   crafted text could end “bracketed paste” mode early and run a command without
   confirmation.
@@ -45,10 +95,11 @@ de texte à sa release GitHub.
 
 **Sécurité** (corrections à la suite d'un audit du code)
 - Une seule copie de l'application à la fois : la relancer ramène la fenêtre existante
-  au premier plan. Le coffre est en plus verrouillé tant qu'il est ouvert, et une
-  modification n'est plus enregistrée par-dessus un coffre modifié ailleurs entre-temps :
-  deux copies pouvaient annuler les changements l'une de l'autre, y compris un
-  changement de mot de passe fait après la perte d'une clé de sécurité.
+  au premier plan. Le fichier du coffre est en plus réservé à la copie qui l'a
+  déverrouillé, et une modification n'est plus enregistrée par-dessus un coffre modifié
+  ailleurs entre-temps : deux copies pouvaient annuler les changements l'une de
+  l'autre, y compris un changement de mot de passe fait après la perte d'une clé de
+  sécurité.
 - Collage dans un terminal : les caractères de contrôle sont retirés du texte collé.
   Un texte piégé pouvait terminer le mode « collage encadré » avant l'heure et faire
   exécuter une commande sans validation.

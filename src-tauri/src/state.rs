@@ -36,6 +36,15 @@ struct Inner {
     pending_import: Option<PendingImport>,
     last_activity: Instant,
     failed_unlocks: u32,
+    /// Délai de grâce du fournisseur d'identité (réglage du coffre, gardé ici pour
+    /// être lisible coffre verrouillé) et dernière connexion par le navigateur.
+    /// En mémoire seulement : après un redémarrage, une connexion est exigée.
+    oidc_grace: Duration,
+    last_oidc_login: Option<Instant>,
+}
+
+fn grace_of(vault: &Vault) -> Duration {
+    Duration::from_secs(u64::from(vault.data.settings.oidc_reauth_minutes) * 60)
 }
 
 impl AppState {
@@ -47,6 +56,8 @@ impl AppState {
                 pending_import: None,
                 last_activity: Instant::now(),
                 failed_unlocks: 0,
+                oidc_grace: Duration::ZERO,
+                last_oidc_login: None,
             }),
             unlocking: AtomicBool::new(false),
         }
@@ -69,6 +80,7 @@ impl AppState {
 
     pub fn set_vault(&self, vault: Vault) {
         let mut inner = self.lock_inner();
+        inner.oidc_grace = grace_of(&vault);
         inner.vault = Some(vault);
         inner.pending_import = None;
         inner.last_activity = Instant::now();
@@ -99,6 +111,20 @@ impl AppState {
             return Err(CmdError::locked());
         }
         inner.pending_import.take().ok_or_else(|| CmdError::new("no_import", tr!("err.noImport")))
+    }
+
+    /// Âge maximal accepté pour la connexion chez le fournisseur : `None` s'il faut
+    /// une nouvelle authentification (délai à 0, écoulé, ou aucune connexion depuis le
+    /// démarrage), sinon le délai de grâce.
+    pub fn oidc_grace_window(&self) -> Option<Duration> {
+        let inner = self.lock_inner();
+        let last = inner.last_oidc_login?;
+        (!inner.oidc_grace.is_zero() && last.elapsed() < inner.oidc_grace).then_some(inner.oidc_grace)
+    }
+
+    /// Connexion par le navigateur réussie : point de départ du délai de grâce.
+    pub fn record_oidc_login(&self) {
+        self.lock_inner().last_oidc_login = Some(Instant::now());
     }
 
     pub fn touch(&self) {
@@ -147,6 +173,7 @@ impl AppState {
             vault.data = backup;
             return Err(e.into());
         }
+        inner.oidc_grace = grace_of(inner.vault.as_ref().expect("coffre ouvert ci-dessus"));
         Ok(out)
     }
 

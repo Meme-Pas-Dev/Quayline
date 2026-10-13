@@ -11,6 +11,7 @@ mod platform;
 mod sftp;
 mod ssh;
 mod state;
+mod text;
 mod updates;
 
 use std::time::Duration;

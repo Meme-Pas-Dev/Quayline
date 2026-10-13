@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- Fusionné par Tauri dans le Info.plist du bundle macOS : l'application est en
-     français, y compris les éléments de menu ajoutés par macOS. -->
+     anglais et en français ; les éléments de menu ajoutés par macOS suivent la langue
+     du système parmi ces deux-là. -->
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>fr</string>
+	<string>en</string>
 	<key>CFBundleLocalizations</key>
 	<array>
+		<string>en</string>
 		<string>fr</string>
 	</array>
 </dict>

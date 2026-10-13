@@ -110,6 +110,7 @@
         ...settings,
         auto_lock_minutes: Number(settings.auto_lock_minutes),
         clipboard_clear_seconds: Number(settings.clipboard_clear_seconds),
+        oidc_reauth_minutes: Number(settings.oidc_reauth_minutes),
         terminal_font_size: Number(settings.terminal_font_size),
       });
       data.settings = { ...settings };
@@ -284,6 +285,19 @@
           <option value={30}>{t("duration.seconds", { count: 30 })}</option>
           <option value={60}>{tn("duration.minutes", 1)}</option>
           <option value={0}>{t("duration.never")}</option>
+        </select>
+      </div>
+      <div class="setting">
+        <div>
+          <strong>{t("settings.oidcReauth")}</strong>
+          <p>{t("settings.oidcReauthHint")}</p>
+        </div>
+        <select class="input" bind:value={settings.oidc_reauth_minutes} onchange={save}>
+          <option value={0}>{t("settings.oidcReauthAlways")}</option>
+          {#each [5, 15, 30] as m}
+            <option value={m}>{t("settings.oidcReauthAfter", { duration: tn("duration.minutes", m) })}</option>
+          {/each}
+          <option value={60}>{t("settings.oidcReauthAfter", { duration: t("duration.hour") })}</option>
         </select>
       </div>
     </section>

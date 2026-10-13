@@ -110,6 +110,7 @@
         password,
       );
       toast(t("oidc.enabledFor", { provider: providerName(providerId), account: identity.name ?? identity.subject }), "success", 5000);
+      if (identity.reauthUnverified) toast(t("oidc.reauthUnverified", { provider: providerName(providerId) }), "info", 12000);
       editing = false;
       await load();
     } catch (err) {

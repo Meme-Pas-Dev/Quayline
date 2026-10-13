@@ -9,7 +9,9 @@ pub mod vault;
 
 pub use model::{Host, HostKind, Identity, KnownHost, Settings, VaultData};
 pub use secret::Secret;
-pub use vault::{check_password_policy, Fido2Binding, KdfParams, OidcBinding, Vault, MIN_PASSWORD_LEN};
+pub use vault::{
+    check_password_policy, Fido2Binding, KdfParams, NewPassword, OidcBinding, PasswordVerifier, Vault, MIN_PASSWORD_LEN,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

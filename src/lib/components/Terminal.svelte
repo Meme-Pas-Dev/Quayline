@@ -226,14 +226,14 @@
         <Icon name="clipboard" size={15} /> {t("terminal.paste")} <kbd>{KEYS.paste}</kbd>
       </button>
       <button onclick={() => menuAction(() => term?.selectAll())}>
-        <Icon name="check" size={15} /> Tout sélectionner
+        <Icon name="check" size={15} /> {t("terminal.selectAll")}
       </button>
       <div class="sep"></div>
       <button onclick={() => menuAction(() => {
           term?.clearSelection();
           term?.clear();
         })}>
-        <Icon name="trash" size={15} /> Effacer l'écran
+        <Icon name="trash" size={15} /> {t("terminal.clearScreen")}
       </button>
     </div>
   {/if}

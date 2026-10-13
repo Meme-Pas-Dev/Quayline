@@ -3,7 +3,13 @@ name: RPM Fedora
 # Étiquettes de version : RPM signé de la release, construit uniquement dans le dépôt
 # public (Meme-Pas-Dev/Quayline), qui reçoit chaque version depuis le dépôt de
 # développement (workflow « Publication »). Lancement manuel possible partout (onglet
-# Actions → RPM Fedora → Run workflow).
+# Actions → RPM Fedora → Run workflow) : RPM non signé, rien n'est publié.
+#
+# La clé de signature (PACKAGE_SIGNING_KEY) est un secret de l'environnement GitHub
+# « release », réservé aux étiquettes v* : elle n'est lue que par le job « sign », qui
+# ne récupère pas le code et n'exécute rien du projet (ni npm, ni build.rs, ni tests).
+# Les builds d'étiquette n'utilisent aucun cache de compilation : rien d'une exécution
+# antérieure n'entre dans un paquet publié.
 on:
   push:
     tags: ["v*"]
@@ -35,7 +41,6 @@ jobs:
           dnf install -y --setopt=install_weak_deps=False
           git tar zstd gcc gcc-c++ make pkgconf-pkg-config file
           webkit2gtk4.1-devel openssl-devel librsvg2-devel systemd-devel
-          rpm-sign gnupg2
           rust cargo clippy nodejs npm
 
       # Numéro de build : celui du dépôt de développement, inscrit dans build-info par
@@ -53,18 +58,27 @@ jobs:
           cat build-info
           echo "BUILD=$(head -n1 build-info)" >> "$GITHUB_ENV"
 
-      # Seuls les sources des crates et le build release sont mis en cache :
-      # le dossier target/debug faisait grossir le cache jusqu'à saturer le disque.
-      - name: Cache Cargo
+      # Sources des crates : vérifiées par Cargo (sommes de Cargo.lock), donc mises en
+      # cache même pour les étiquettes.
+      - name: Cache des sources Cargo
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            target/release
-          key: fedora44-cargo-v2-${{ hashFiles('Cargo.lock') }}
-          restore-keys: fedora44-cargo-v2-
+          key: fedora44-cargo-src-v1-${{ hashFiles('Cargo.lock') }}
+          restore-keys: fedora44-cargo-src-v1-
+
+      # Build release : seulement hors étiquettes (le dossier target/debug faisait
+      # grossir le cache jusqu'à saturer le disque, il a son propre cache plus bas).
+      - name: Cache du build release
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: target/release
+          key: fedora44-release-v1-${{ hashFiles('Cargo.lock') }}
+          restore-keys: fedora44-release-v1-
 
       # Compilation des tests et de clippy (target/debug) : sauvegardée une seule fois
       # par couple Cargo.lock / version de Rust, sans clé de repli, pour qu'elle ne
@@ -76,13 +90,16 @@ jobs:
 
       - name: Cache des tests
         id: test-cache
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: target/debug
           key: fedora44-debug-v1-${{ steps.rust.outputs.version }}-${{ hashFiles('Cargo.lock') }}
 
+      # Sans les scripts d'installation des paquets npm : inutiles ici, et premier
+      # point d'entrée d'un paquet compromis.
       - name: Dépendances npm
-        run: npm ci --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Tests Rust
         run: cargo test --workspace --locked
@@ -94,7 +111,7 @@ jobs:
         run: npm run check
 
       - name: Sauvegarde du cache des tests
-        if: steps.test-cache.outputs.cache-hit != 'true'
+        if: ${{ !startsWith(github.ref, 'refs/tags/') && steps.test-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: target/debug
@@ -115,30 +132,9 @@ jobs:
           npx tauri build --bundles rpm
           --config '{"bundle":{"linux":{"rpm":{"release":"${{ env.BUILD }}","files":{"/usr/share/metainfo/dev.memepas.quayline.metainfo.xml":"../target/metainfo.xml"}}}}}' -- --locked
 
-      # Signature si le secret PACKAGE_SIGNING_KEY est configuré (clé GPG privée,
-      # armurée, sans phrase de passe) : le RPM d'abord (rpmsign modifie le fichier),
-      # puis les empreintes, puis le fichier d'empreintes (SHA256SUMS.asc), vérifié par
-      # les scripts d'installation avec packaging/signing-key.asc.
-      - name: Signature et empreintes SHA-256
+      - name: Empreintes SHA-256
         working-directory: target/release/bundle/rpm
-        shell: bash
-        env:
-          SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
-        run: |
-          set -euo pipefail
-          if [[ -n ${SIGNING_KEY:-} ]]; then
-            export GNUPGHOME=$(mktemp -d)
-            printf '%s\n' "$SIGNING_KEY" | gpg --batch --quiet --import
-            fpr=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ { print $10; exit }')
-            rpmsign --define "_gpg_name $fpr" --addsign ./*.rpm
-          else
-            echo "::warning::Secret PACKAGE_SIGNING_KEY absent : paquets non signés."
-          fi
-          sha256sum *.rpm | tee SHA256SUMS
-          if [[ -n ${SIGNING_KEY:-} ]]; then
-            gpg --batch --yes --local-user "$fpr" --armor --detach-sign SHA256SUMS
-            rm -rf "$GNUPGHOME"
-          fi
+        run: sha256sum *.rpm | tee SHA256SUMS
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -149,10 +145,58 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # Étiquettes seulement : signature du RPM (rpmsign modifie le fichier), puis des
+  # empreintes (SHA256SUMS.asc, vérifié par les scripts d'installation avec
+  # packaging/signing-key.asc). Clé GPG privée, armurée, sans phrase de passe.
+  sign:
+    name: Signature du RPM
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: rpm
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    environment: release
+    steps:
+      - name: Outils
+        run: dnf install -y --setopt=install_weak_deps=False rpm-sign gnupg2
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: quayline-rpm-fc44
+          path: dist
+
+      - name: Signature et empreintes
+        working-directory: dist
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z ${SIGNING_KEY:-} ]]; then
+            echo "::error::Secret PACKAGE_SIGNING_KEY absent de l'environnement « release »."
+            exit 1
+          fi
+          export GNUPGHOME=$(mktemp -d)
+          trap 'rm -rf "$GNUPGHOME"' EXIT
+          printf '%s\n' "$SIGNING_KEY" | gpg --batch --quiet --import
+          fpr=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ { print $10; exit }')
+          rpmsign --define "_gpg_name $fpr" --addsign ./*.rpm
+          rm -f SHA256SUMS*
+          sha256sum *.rpm | tee SHA256SUMS
+          gpg --batch --yes --local-user "$fpr" --armor --detach-sign SHA256SUMS
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: quayline-rpm-fc44-signed
+          path: |
+            dist/*.rpm
+            dist/SHA256SUMS*
+          if-no-files-found: error
+          retention-days: 30
+
   release:
     name: Publication de la release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: rpm
+    needs: sign
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -171,7 +215,7 @@ jobs:
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: quayline-rpm-fc44
+          name: quayline-rpm-fc44-signed
           path: dist
 
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2

@@ -171,10 +171,11 @@ pub async fn vault_import_preview(app: AppHandle, passphrase: Secret) -> CmdResu
 }
 
 /// Dernière étape : fusion dans le coffre, puis enregistrement.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_import_apply(
     app: AppHandle,
     duplicates: Duplicates,
+    import_known_hosts: bool,
     import_settings: bool,
 ) -> CmdResult<ImportReport> {
     let state = app.state::<AppState>();
@@ -183,7 +184,7 @@ pub fn vault_import_apply(
         PendingImport::File(_) => return Err(CmdError::new("no_import", tr!("err.import.notDecrypted"))),
     };
     let suffix = tr!("backup.importedSuffix");
-    state.mutate_vault(|v| Ok(export::merge(&mut v.data, data, duplicates, import_settings, MAX_LABEL, &suffix)))
+    state.mutate_vault(|v| Ok(export::merge(&mut v.data, data, duplicates, import_known_hosts, import_settings, MAX_LABEL, &suffix)))
 }
 
 #[tauri::command]

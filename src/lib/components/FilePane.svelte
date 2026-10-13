@@ -284,7 +284,7 @@
             onclick={(e) => {
               e.stopPropagation();
               onnavigate(c.path);
-            }}>{c.label}</span
+            }}>{displayName(c.label)}</span
           >
         {/each}
       </button>

@@ -21,7 +21,7 @@ fn target(app_id: &str, r: &SecretRef<'_>) -> String {
 }
 
 fn last_error() -> String {
-    tr!("err.keyring.unavailable", detail = std::io::Error::from_raw_os_error(unsafe { GetLastError() } as i32))
+    tr!("err.keyring.systemUnavailable", detail = std::io::Error::from_raw_os_error(unsafe { GetLastError() } as i32))
 }
 
 fn write(app_id: &str, label: &str, r: &SecretRef<'_>, secret: &[u8]) -> Result<(), String> {
@@ -33,7 +33,7 @@ fn write(app_id: &str, label: &str, r: &SecretRef<'_>, secret: &[u8]) -> Result<
         Type: CRED_TYPE_GENERIC,
         TargetName: target.as_mut_ptr(),
         Comment: comment.as_mut_ptr(),
-        CredentialBlobSize: u32::try_from(blob.len()).map_err(|_| tr!("err.keyring.unavailable", detail = "size"))?,
+        CredentialBlobSize: u32::try_from(blob.len()).map_err(|_| tr!("err.keyring.systemUnavailable", detail = "size"))?,
         CredentialBlob: blob.as_mut_ptr(),
         Persist: CRED_PERSIST_LOCAL_MACHINE,
         UserName: user.as_mut_ptr(),

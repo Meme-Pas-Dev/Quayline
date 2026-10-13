@@ -6,7 +6,10 @@
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use ssh_key::{Algorithm, HashAlg, LineEnding, PrivateKey};
+// Même analyseur de clés que russh (une seule version de ssh-key) : une clé acceptée
+// ici est une clé que la connexion saura utiliser.
+use russh::keys::ssh_key::{Kdf, LineEnding};
+use russh::keys::{Algorithm, HashAlg, PrivateKey};
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::{AppHandle, Manager, State};
 use vault::export::ExportData;
@@ -133,10 +136,10 @@ pub fn vault_touch(state: State<'_, AppState>) {
 pub(crate) async fn confirm_master_password(app: &AppHandle, password: Secret) -> CmdResult<()> {
     let state = app.state::<AppState>();
     let _guard = state.begin_unlock()?;
-    let ok = blocking(app, move |state| {
-        state.with_vault(|v| v.verify_password(password.expose().as_bytes()).map_err(Into::into))
-    })
-    .await?;
+    // Copie des slots sous le verrou, dérivation Argon2 hors du verrou : l'interface
+    // (activité, liste des hôtes…) ne reste pas bloquée pendant le calcul.
+    let verifier = state.with_vault(|v| Ok(v.password_verifier()))?;
+    let ok = blocking(app, move |_| verifier.verify(password.expose().as_bytes()).map_err(Into::into)).await?;
     if ok {
         return Ok(());
     }
@@ -147,18 +150,17 @@ pub(crate) async fn confirm_master_password(app: &AppHandle, password: Secret) -
 
 #[tauri::command]
 pub async fn vault_change_password(app: AppHandle, current: Secret, new: Secret) -> CmdResult<()> {
-    confirm_master_password(&app, current.clone()).await?;
+    confirm_master_password(&app, current).await?;
     // Le changement renouvelle la clé de données : Pocket ID et les clés FIDO2 sont
     // retirés du coffre. La clé Pocket ID est aussi effacée du trousseau système.
     let oidc = app.state::<AppState>().with_vault(|v| Ok(v.oidc().cloned()))?;
-    blocking(&app, move |state| {
-        state.with_vault_mut_nosave(|vault| {
-            vault
-                .change_password(current.expose().as_bytes(), new.expose().as_bytes(), KdfParams::DEFAULT)
-                .map_err(Into::into)
-        })
+    // Dérivation du nouveau mot de passe hors du verrou, puis remplacement (rapide).
+    let prepared = blocking(&app, move |_| {
+        vault::NewPassword::prepare(new.expose().as_bytes(), KdfParams::DEFAULT).map_err(Into::into)
     })
     .await?;
+    blocking(&app, move |state| state.with_vault_mut_nosave(|vault| vault.apply_new_password(prepared).map_err(Into::into)))
+        .await?;
     if let Some(binding) = oidc {
         crate::oidc::keyring_delete(&binding).await;
     }
@@ -225,35 +227,21 @@ pub fn hosts_list(state: State<'_, AppState>) -> CmdResult<Vec<HostView>> {
     state.with_vault(|v| Ok(v.data.hosts.iter().map(HostView::from).collect()))
 }
 
-#[tauri::command]
+// Les commandes qui écrivent sur disque (chiffrement, fsync) sont marquées `async` :
+// Tauri exécute les commandes synchrones sur le fil principal, qui gèle alors
+// l'interface le temps de l'écriture.
+#[tauri::command(async)]
 pub fn host_save(state: State<'_, AppState>, host: HostInput) -> CmdResult<HostView> {
-    let label = required(&host.label, &tr!("field.name"))?;
-    let hostname = host.hostname.trim().to_string();
-    if hostname.is_empty() || hostname.len() > 253 || hostname.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        return Err(CmdError::invalid(tr!("err.host.address")));
-    }
-    if host.port == 0 {
-        return Err(CmdError::invalid(tr!("err.host.port")));
-    }
-    let username = optional(host.username, &tr!("field.username"))?;
-    if username.as_deref().is_some_and(|u| u.chars().any(|c| c.is_whitespace() || c.is_control())) {
-        return Err(CmdError::invalid(tr!("err.host.username")));
-    }
-    let group = optional(host.group, &tr!("field.group"))?;
-    let color = optional(host.color, &tr!("field.color"))?;
-    if color.as_deref().is_some_and(|c| !is_hex_color(c)) {
-        return Err(CmdError::invalid(tr!("err.host.color")));
-    }
-    let tags: Vec<String> = host
-        .tags
-        .iter()
-        .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty() && t.chars().count() <= 32)
-        .take(16)
-        .collect();
-    if host.notes.chars().count() > 4000 {
-        return Err(CmdError::invalid(tr!("err.host.notes")));
-    }
+    let HostFields { label, hostname, port, username, group, color, tags, notes } = validate_host(HostFields {
+        label: host.label,
+        hostname: host.hostname,
+        port: host.port,
+        username: host.username,
+        group: host.group,
+        color: host.color,
+        tags: host.tags,
+        notes: host.notes,
+    })?;
 
     state.mutate_vault(|v| {
         if let Some(identity_id) = host.identity_id {
@@ -268,11 +256,11 @@ pub fn host_save(state: State<'_, AppState>, host: HostInput) -> CmdResult<HostV
             group,
             tags,
             hostname,
-            port: host.port,
+            port,
             username,
             identity_id: host.identity_id,
             color,
-            notes: host.notes,
+            notes,
         };
         let view = HostView::from(&record);
         match host.id {
@@ -286,7 +274,7 @@ pub fn host_save(state: State<'_, AppState>, host: HostInput) -> CmdResult<HostV
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn host_delete(state: State<'_, AppState>, id: Uuid) -> CmdResult<()> {
     state.mutate_vault(|v| {
         let before = v.data.hosts.len();
@@ -385,7 +373,7 @@ pub fn identities_list(state: State<'_, AppState>) -> CmdResult<Vec<IdentityView
     state.with_vault(|v| Ok(v.data.identities.iter().map(IdentityView::from).collect()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn identity_save(state: State<'_, AppState>, identity: IdentityInput) -> CmdResult<IdentityView> {
     let label = required(&identity.label, &tr!("field.name"))?;
     let username = optional(identity.username, &tr!("field.username"))?;
@@ -438,7 +426,7 @@ fn validate_key(identity: &Identity) -> CmdResult<()> {
     if key.is_encrypted() {
         // Le nombre de tours vient du fichier : une clé fabriquée pourrait occuper
         // l'application pendant des heures (ssh-keygen en met 16 par défaut).
-        if let ssh_key::Kdf::Bcrypt { rounds, .. } = key.kdf() {
+        if let Kdf::Bcrypt { rounds, .. } = key.kdf() {
             if *rounds > MAX_BCRYPT_ROUNDS {
                 return Err(CmdError::invalid(tr!("err.identity.tooManyRounds", max = MAX_BCRYPT_ROUNDS)));
             }
@@ -466,7 +454,7 @@ pub fn identity_copy_password(app: AppHandle, state: State<'_, AppState>, id: Uu
     Ok(clear_after)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn identity_delete(state: State<'_, AppState>, id: Uuid) -> CmdResult<()> {
     state.mutate_vault(|v| {
         let before = v.data.identities.len();
@@ -482,7 +470,7 @@ pub fn identity_delete(state: State<'_, AppState>, id: Uuid) -> CmdResult<()> {
 }
 
 /// Génère une paire de clés Ed25519 et l'enregistre directement dans le trousseau.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn identity_generate_key(
     state: State<'_, AppState>,
     label: String,
@@ -490,7 +478,7 @@ pub fn identity_generate_key(
 ) -> CmdResult<IdentityView> {
     let label = required(&label, &tr!("field.name"))?;
     let username = optional(username, &tr!("field.username"))?;
-    let mut key = PrivateKey::random(&mut rand_core::OsRng, Algorithm::Ed25519)
+    let mut key = PrivateKey::random(&mut rand::rng(), Algorithm::Ed25519)
         .map_err(|_| CmdError::new("internal", tr!("err.keygen")))?;
     key.set_comment(format!("{}:{label}", crate::identity::SLUG));
     let pem = key.to_openssh(LineEnding::LF).map_err(|_| CmdError::new("internal", tr!("err.keyEncode")))?;
@@ -512,6 +500,9 @@ pub fn identity_generate_key(
 
 // ───────────────────────────── Réglages ─────────────────────────────
 
+/// Délais de grâce proposés pour le fournisseur d'identité (minutes ; 0 = à chaque fois).
+const OIDC_REAUTH_CHOICES: &[u32] = &[0, 5, 15, 30, 60];
+
 pub const TERMINAL_THEMES: &[&str] = &["night", "day", "catppuccin-mocha", "dracula", "nord"];
 
 #[tauri::command]
@@ -526,12 +517,13 @@ pub fn settings_get(state: State<'_, AppState>) -> CmdResult<Settings> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn settings_save(state: State<'_, AppState>, settings: Settings) -> CmdResult<Settings> {
     if settings.auto_lock_minutes > 240
         || settings.clipboard_clear_seconds > 600
         || !(8..=32).contains(&settings.terminal_font_size)
         || !TERMINAL_THEMES.contains(&settings.terminal_theme.as_str())
+        || !OIDC_REAUTH_CHOICES.contains(&settings.oidc_reauth_minutes)
     {
         return Err(CmdError::invalid(tr!("err.settingsRange")));
     }
@@ -628,7 +620,7 @@ pub fn known_hosts_list(state: State<'_, AppState>) -> CmdResult<Vec<KnownHostVi
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn known_host_delete(state: State<'_, AppState>, hostname: String, port: u16) -> CmdResult<()> {
     state.mutate_vault(|v| {
         v.data.known_hosts.retain(|k| !(k.hostname == hostname && k.port == port));
@@ -660,6 +652,64 @@ fn is_hex_color(c: &str) -> bool {
     c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit())
 }
 
+/// Champs d'un hôte soumis aux mêmes règles à la saisie et à l'import.
+#[derive(Debug, Clone, PartialEq)]
+struct HostFields {
+    label: String,
+    hostname: String,
+    port: u16,
+    username: Option<String>,
+    group: Option<String>,
+    color: Option<String>,
+    tags: Vec<String>,
+    notes: String,
+}
+
+impl HostFields {
+    fn of(h: &vault::Host) -> Self {
+        HostFields {
+            label: h.label.clone(),
+            hostname: h.hostname.clone(),
+            port: h.port,
+            username: h.username.clone(),
+            group: h.group.clone(),
+            color: h.color.clone(),
+            tags: h.tags.clone(),
+            notes: h.notes.clone(),
+        }
+    }
+}
+
+/// Règles d'un hôte (saisie et import) : renvoie les champs normalisés (espaces
+/// retirés, champs vides absents), ou l'erreur du premier champ refusé.
+fn validate_host(f: HostFields) -> CmdResult<HostFields> {
+    let label = required(&f.label, &tr!("field.name"))?;
+    let hostname = f.hostname.trim().to_string();
+    if !valid_hostname(&hostname) {
+        return Err(CmdError::invalid(tr!("err.host.address")));
+    }
+    if f.port == 0 {
+        return Err(CmdError::invalid(tr!("err.host.port")));
+    }
+    let username = optional(f.username, &tr!("field.username"))?;
+    if username.as_deref().is_some_and(|u| u.chars().any(char::is_whitespace)) {
+        return Err(CmdError::invalid(tr!("err.host.username")));
+    }
+    let group = optional(f.group, &tr!("field.group"))?;
+    let color = optional(f.color, &tr!("field.color"))?;
+    if color.as_deref().is_some_and(|c| !is_hex_color(c)) {
+        return Err(CmdError::invalid(tr!("err.host.color")));
+    }
+    let tags: Vec<String> = f.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
+    if tags.len() > 16 || tags.iter().any(|t| t.chars().count() > 32 || t.chars().any(char::is_control)) {
+        return Err(CmdError::invalid(tr!("err.host.tags")));
+    }
+    if f.notes.chars().count() > 4000 {
+        return Err(CmdError::invalid(tr!("err.host.notes")));
+    }
+    Ok(HostFields { label, hostname, port: f.port, username, group, color, tags, notes: f.notes })
+}
+
 fn valid_hostname(h: &str) -> bool {
     !h.is_empty() && h.len() <= 253 && !h.chars().any(|c| c.is_whitespace() || c.is_control())
 }
@@ -676,18 +726,10 @@ pub(crate) fn validate_import(data: &mut ExportData) -> CmdResult<()> {
         return Err(CmdError::invalid(tr!("err.file.tooMany")));
     }
     for h in &data.hosts {
-        let ok = required(&h.label, "").is_ok_and(|l| l == h.label)
-            && valid_hostname(&h.hostname)
-            && h.port != 0
-            && h.username.as_deref().is_none_or(|u| {
-                required(u, "").is_ok_and(|v| v == u) && !u.chars().any(char::is_whitespace)
-            })
-            && h.group.as_deref().is_none_or(|g| required(g, "").is_ok_and(|v| v == g))
-            && h.color.as_deref().is_none_or(is_hex_color)
-            && h.tags.len() <= 16
-            && h.tags.iter().all(|t| !t.trim().is_empty() && t.chars().count() <= 32)
-            && h.notes.chars().count() <= 4000;
-        if !ok {
+        // Mêmes règles que la saisie ; le fichier doit en plus être déjà normalisé
+        // (une valeur que la saisie aurait modifiée trahit un fichier fabriqué).
+        let fields = HostFields::of(h);
+        if validate_host(fields.clone()).ok() != Some(fields) {
             return Err(bad(tr!("item.host"), &h.label.chars().take(40).collect::<String>()));
         }
     }
@@ -717,7 +759,11 @@ pub(crate) fn validate_import(data: &mut ExportData) -> CmdResult<()> {
         if !TERMINAL_THEMES.contains(&s.terminal_theme.as_str()) {
             s.terminal_theme = Settings::default().terminal_theme;
         }
-        if s.auto_lock_minutes > 240 || s.clipboard_clear_seconds > 600 || !(8..=32).contains(&s.terminal_font_size) {
+        if s.auto_lock_minutes > 240
+            || s.clipboard_clear_seconds > 600
+            || !(8..=32).contains(&s.terminal_font_size)
+            || !OIDC_REAUTH_CHOICES.contains(&s.oidc_reauth_minutes)
+        {
             return Err(CmdError::invalid(tr!("err.file.settings")));
         }
     }
@@ -739,9 +785,36 @@ mod tests {
         }
     }
 
+    fn fields() -> HostFields {
+        HostFields {
+            label: "Web".into(),
+            hostname: "web.example.org".into(),
+            port: 22,
+            username: Some("deploy".into()),
+            group: None,
+            color: Some("#aabbcc".into()),
+            tags: vec!["prod".into()],
+            notes: String::new(),
+        }
+    }
+
+    #[test]
+    fn host_rules_are_shared_by_input_and_import() {
+        // Saisie : normalisée.
+        let typed = HostFields { label: "  Web ".into(), tags: vec![" prod ".into(), "".into()], ..fields() };
+        assert_eq!(validate_host(typed).unwrap(), fields());
+        // Import : déjà normalisé, sinon refusé.
+        assert_eq!(validate_host(fields()).ok(), Some(fields()));
+        let too_many = HostFields { tags: (0..17).map(|i| format!("t{i}")).collect(), ..fields() };
+        assert!(validate_host(too_many).is_err(), "même limite pour la saisie et l'import");
+        assert!(validate_host(HostFields { username: Some("a b".into()), ..fields() }).is_err());
+        assert!(validate_host(HostFields { color: Some("red".into()), ..fields() }).is_err());
+        assert!(validate_host(HostFields { port: 0, ..fields() }).is_err());
+    }
+
     #[test]
     fn pasted_key_with_crlf_and_spaces_is_accepted() {
-        let key = PrivateKey::random(&mut rand_core::OsRng, Algorithm::Ed25519).unwrap();
+        let key = PrivateKey::random(&mut rand::rng(), Algorithm::Ed25519).unwrap();
         let pem = key.to_openssh(LineEnding::CRLF).unwrap();
         let identity = identity_with_key(&format!("  \n{}\n\n", pem.as_str()), None);
         validate_key(&identity).unwrap();
@@ -753,8 +826,8 @@ mod tests {
 
     #[test]
     fn encrypted_key_passphrase_is_checked() {
-        let key = PrivateKey::random(&mut rand_core::OsRng, Algorithm::Ed25519).unwrap();
-        let encrypted = key.encrypt(&mut rand_core::OsRng, "bonne phrase").unwrap();
+        let key = PrivateKey::random(&mut rand::rng(), Algorithm::Ed25519).unwrap();
+        let encrypted = key.encrypt(&mut rand::rng(), "bonne phrase").unwrap();
         let pem = encrypted.to_openssh(LineEnding::LF).unwrap();
         validate_key(&identity_with_key(&pem, Some("bonne phrase"))).unwrap();
         validate_key(&identity_with_key(&pem, None)).unwrap();

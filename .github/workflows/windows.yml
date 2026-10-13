@@ -46,19 +46,28 @@ jobs:
           rustup default stable
           rustc --version
 
-      - name: Cache Cargo
+      - name: Cache des sources Cargo
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            target/release
-          key: windows-cargo-v1-${{ hashFiles('Cargo.lock') }}
-          restore-keys: windows-cargo-v1-
+          key: windows-cargo-src-v1-${{ hashFiles('Cargo.lock') }}
+          restore-keys: windows-cargo-src-v1-
+
+      # Pas de cache de compilation pour les étiquettes : rien d'une exécution
+      # antérieure n'entre dans l'installateur publié.
+      - name: Cache du build release
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: target/release
+          key: windows-release-v1-${{ hashFiles('Cargo.lock') }}
+          restore-keys: windows-release-v1-
 
       - name: Dépendances npm
-        run: npm ci --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Tests Rust
         run: cargo test --workspace --locked
@@ -91,13 +100,15 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # Sur une étiquette vX.Y.Z : empreinte signée (même clé GPG que pour Linux), puis
-  # installateur joint à la release créée par le workflow RPM.
+  # Sur une étiquette vX.Y.Z : empreinte signée (même clé GPG que pour Linux, secret
+  # de l'environnement « release »), sans le code du projet, puis installateur joint à
+  # la release créée par le workflow RPM.
   release:
     name: Publication dans la release
     if: startsWith(github.ref, 'refs/tags/v')
     needs: windows
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
     steps:
@@ -113,14 +124,15 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z ${SIGNING_KEY:-} ]]; then
-            echo "::warning::Secret PACKAGE_SIGNING_KEY absent : empreintes non signées."
-            exit 0
+            echo "::error::Secret PACKAGE_SIGNING_KEY absent de l'environnement « release »."
+            exit 1
           fi
           export GNUPGHOME=$(mktemp -d)
+          trap 'rm -rf "$GNUPGHOME"' EXIT
           printf '%s\n' "$SIGNING_KEY" | gpg --batch --quiet --import
           fpr=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ { print $10; exit }')
+          sha256sum -c SHA256SUMS.windows
           gpg --batch --yes --local-user "$fpr" --armor --detach-sign SHA256SUMS.windows
-          rm -rf "$GNUPGHOME"
 
       # La release est créée par le workflow RPM (seul créateur) : on attend qu'elle
       # existe, au plus 40 minutes.

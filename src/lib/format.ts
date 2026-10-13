@@ -19,10 +19,12 @@ export function formatDate(secs: number | null): string {
 }
 
 /**
- * Nom de fichier venu d'un serveur, rendu sans piège à l'affichage : les caractères
- * de contrôle et d'inversion bidirectionnelle (U+202E…) sont remplacés par « � »,
- * pour qu'un « facture\u202Efdp.exe » ne s'affiche pas « factureexe.pdf ».
+ * Nom de fichier ou chemin venu d'un serveur, rendu sans piège à l'affichage : les
+ * caractères de contrôle, d'inversion bidirectionnelle (U+202E…), de largeur nulle
+ * (U+200B…) et les séparateurs de ligne sont remplacés par « � », pour qu'un
+ * « facture\u202Efdp.exe » ne s'affiche pas « factureexe.pdf ». Même liste que
+ * `text.rs` côté backend.
  */
 export function displayName(name: string): string {
-  return name.replace(/[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "\ufffd");
+  return name.replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]/g, "\ufffd");
 }

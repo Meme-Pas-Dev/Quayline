@@ -2,10 +2,13 @@ name: COPR
 
 # Étiquettes de version : envoie les sources à COPR (dépôt matt-mpd/quayline), qui
 # compile et signe le RPM ; les utilisateurs de Fedora le reçoivent avec « dnf upgrade »
-# ou Discover. Uniquement dans le dépôt public (Meme-Pas-Dev/Quayline) ; lancement
-# manuel possible (onglet Actions → COPR → Run workflow).
+# ou Discover. Uniquement dans le dépôt public (Meme-Pas-Dev/Quayline). Lancement
+# manuel (onglet Actions → COPR → Run workflow) : paquet source seulement (artifact),
+# rien n'est envoyé ; lancé sur une étiquette (« Use workflow from » → vX.Y.Z), il
+# renvoie cette version à COPR.
 # Secret COPR_CONFIG : contenu de ~/.config/copr (jeton d'API COPR, à renouveler à
-# son expiration).
+# son expiration), dans l'environnement GitHub « release » (étiquettes v* seulement),
+# lu par un job qui ne récupère pas le code du projet.
 on:
   push:
     tags: ["v*"]
@@ -19,14 +22,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  copr:
-    name: Paquet source et build COPR
+  srpm:
+    name: Paquet source
     if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/Quayline'
     runs-on: ubuntu-latest
     container: registry.fedoraproject.org/fedora:44
     steps:
       - name: Outils
-        run: dnf install -y --setopt=install_weak_deps=False git tar gzip rpm-build copr-cli
+        run: dnf install -y --setopt=install_weak_deps=False git tar gzip rpm-build
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -49,20 +52,42 @@ jobs:
           sed -e "s/@VERSION@/$version/g" -e "s/@BUILD@/$build/g" -e "s/@DATE@/$(LC_ALL=C date -u '+%a %b %d %Y')/" \
             packaging/copr/quayline.spec > "$top/SPECS/quayline.spec"
           rpmbuild -bs "$top/SPECS/quayline.spec"
-          ls -l "$top/SRPMS"
+          mkdir -p out && cp "$top"/SRPMS/*.src.rpm out/ && ls -l out
 
-      - name: Build COPR
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: quayline-srpm
+          path: out/*.src.rpm
+          if-no-files-found: error
+          retention-days: 30
+
+  copr:
+    name: Build COPR
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: srpm
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:44
+    environment: release
+    steps:
+      - name: Outils
+        run: dnf install -y --setopt=install_weak_deps=False copr-cli
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: quayline-srpm
+          path: srpm
+
+      - name: Envoi à COPR
         shell: bash
         env:
           COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
         run: |
           set -euo pipefail
           if [[ -z ${COPR_CONFIG:-} ]]; then
-            echo "::error::Secret COPR_CONFIG absent."
+            echo "::error::Secret COPR_CONFIG absent de l'environnement « release »."
             exit 1
           fi
           mkdir -p ~/.config
-          printf '%s\n' "$COPR_CONFIG" > ~/.config/copr
-          chmod 600 ~/.config/copr
-          copr-cli build matt-mpd/quayline ~/rpmbuild/SRPMS/*.src.rpm
-          rm -f ~/.config/copr
+          (umask 077 && printf '%s\n' "$COPR_CONFIG" > ~/.config/copr)
+          trap 'rm -f ~/.config/copr' EXIT
+          copr-cli build matt-mpd/quayline srpm/*.src.rpm

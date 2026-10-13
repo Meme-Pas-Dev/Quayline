@@ -2,9 +2,15 @@ name: macOS
 
 # - Étiquettes de version : Quayline.app signée (Developer ID) et notarisée, publiée en
 #   .dmg dans la release ; uniquement dans le dépôt public (Meme-Pas-Dev/Quayline, où les
-#   minutes sont gratuites) et si les secrets de signature existent.
+#   minutes sont gratuites).
 # - Lancement manuel (onglet Actions → macOS → Run workflow) : tests, clippy, puis
-#   l'application, signée si les secrets existent.
+#   l'application non signée ; rien n'est publié. Lancé sur une étiquette (« Use
+#   workflow from » → vX.Y.Z), il refait le build signé de cette version.
+#
+# Les secrets Apple sont des secrets de l'environnement GitHub « release », réservé aux
+# étiquettes v*. Tauri signe pendant la compilation : contrairement au RPM, la
+# signature ne peut pas être isolée dans un job sans le code du projet. Les builds
+# d'étiquette n'utilisent pas de cache de compilation.
 on:
   push:
     tags: ["v*"]
@@ -23,31 +29,15 @@ env:
   CARGO_INCREMENTAL: "0"
 
 jobs:
-  # Sur une machine Linux (minutes ×1) : les secrets ne sont pas lisibles dans un `if`.
-  check:
-    name: Secrets de signature
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/Quayline'
-    runs-on: ubuntu-latest
-    outputs:
-      signing: ${{ steps.check.outputs.signing }}
-    steps:
-      - id: check
-        env:
-          CERT: ${{ secrets.APPLE_CERTIFICATE }}
-          KEY: ${{ secrets.APPLE_API_KEY_P8 }}
-        run: |
-          if [ -n "$CERT" ] && [ -n "$KEY" ]; then
-            echo "signing=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "signing=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Secrets de signature Apple absents : pas de build signé."
-          fi
-
   macos:
     name: Quayline.app (macOS)
-    needs: check
-    if: needs.check.outputs.signing == 'true' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Meme-Pas-Dev/Quayline'
     runs-on: macos-latest
+    # Secrets de signature seulement pour une étiquette (sans environnement, un
+    # lancement manuel sur une branche n'y a pas accès).
+    environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'release' || '' }}
+    env:
+      SIGNING: ${{ startsWith(github.ref, 'refs/tags/v') }}
     steps:
       # Historique complet : build.rs calcule le numéro de build avec git.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -65,19 +55,26 @@ jobs:
           rustup default stable
           rustc --version
 
-      - name: Cache Cargo
+      - name: Cache des sources Cargo
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-            target/release
-          key: macos-cargo-v1-${{ hashFiles('Cargo.lock') }}
-          restore-keys: macos-cargo-v1-
+          key: macos-cargo-src-v1-${{ hashFiles('Cargo.lock') }}
+          restore-keys: macos-cargo-src-v1-
+
+      - name: Cache du build release
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: target/release
+          key: macos-release-v1-${{ hashFiles('Cargo.lock') }}
+          restore-keys: macos-release-v1-
 
       - name: Dépendances npm
-        run: npm ci --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       # Sur les étiquettes, les tests ont déjà tourné dans le workflow RPM (Linux).
       - name: Tests Rust
@@ -94,9 +91,8 @@ jobs:
 
       # Tauri importe le certificat dans un trousseau temporaire, signe avec le
       # runtime renforcé, notarise l'application auprès d'Apple et agrafe le ticket.
-      - name: Construction (signée et notarisée si les secrets existent)
+      - name: Construction (signée et notarisée pour une étiquette)
         env:
-          SIGNING: ${{ needs.check.outputs.signing }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -106,11 +102,16 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$SIGNING" = "true" ]; then
+            if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_API_KEY_P8" ]; then
+              echo "::error::Secrets de signature Apple absents de l'environnement « release »."
+              exit 1
+            fi
             key_dir=$(mktemp -d)
             printf '%s' "$APPLE_API_KEY_P8" > "$key_dir/AuthKey.p8"
             export APPLE_API_KEY_PATH="$key_dir/AuthKey.p8"
           else
-            unset APPLE_CERTIFICATE APPLE_SIGNING_IDENTITY APPLE_API_ISSUER APPLE_API_KEY
+            unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_ISSUER \
+              APPLE_API_KEY APPLE_API_KEY_P8
           fi
           # Le cache restaure target/release : on retire le bundle des builds précédents.
           rm -rf target/release/bundle
@@ -118,7 +119,7 @@ jobs:
           rm -rf "${key_dir:-/nonexistent}"
 
       - name: Vérification de la signature
-        if: needs.check.outputs.signing == 'true'
+        if: env.SIGNING == 'true'
         working-directory: target/release/bundle/macos
         env:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -148,8 +149,8 @@ jobs:
 
   release:
     name: Publication dans la release
-    if: startsWith(github.ref, 'refs/tags/v') && needs.check.outputs.signing == 'true'
-    needs: [check, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: macos
     runs-on: ubuntu-latest
     permissions:
       contents: write

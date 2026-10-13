@@ -97,6 +97,10 @@ pub struct Settings {
     /// Rechercher une nouvelle version sur GitHub après le déverrouillage ; `None` tant
     /// que l'utilisateur n'a pas répondu (question posée après le déverrouillage).
     pub check_updates: Option<bool>,
+    /// Déverrouillage par fournisseur d'identité dans le navigateur : délai (minutes)
+    /// après la dernière connexion pendant lequel la session du fournisseur suffit ;
+    /// au-delà, ou à 0, une nouvelle authentification est exigée.
+    pub oidc_reauth_minutes: u32,
 }
 
 impl Default for Settings {
@@ -109,6 +113,7 @@ impl Default for Settings {
             lock_closes_sessions: true,
             lock_on_system_events: true,
             check_updates: None,
+            oidc_reauth_minutes: 15,
         }
     }
 }

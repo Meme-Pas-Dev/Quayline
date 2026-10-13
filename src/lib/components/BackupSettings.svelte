@@ -1,12 +1,14 @@
 <script lang="ts">
-  import { intlLocale, t, tn } from "../i18n/index.svelte";
+  import { intlLocale, t, tn, type MessageKey } from "../i18n/index.svelte";
   import {
     api,
     errorMessage,
     type Duplicates,
     type ExportSelection,
     type ImportPreview,
+    type SettingChange,
   } from "../api";
+  import { displayName } from "../format";
   import { data, handleError, reload } from "../store.svelte";
   import Icon from "./Icon.svelte";
   import Modal from "./Modal.svelte";
@@ -60,6 +62,7 @@
   let preview = $state<ImportPreview | null>(null);
   let duplicates = $state<Duplicates>("skip");
   let importSettings = $state(false);
+  let importKnownHosts = $state(false);
   let importBusy = $state(false);
   let importError = $state("");
 
@@ -76,6 +79,7 @@
       preview = null;
       duplicates = "skip";
       importSettings = false;
+      importKnownHosts = false;
     } catch (err) {
       handleError(err);
     }
@@ -103,12 +107,28 @@
     }
   }
 
+  const SETTING_LABELS: Record<SettingChange["setting"], MessageKey> = {
+    autoLockMinutes: "settings.autoLock",
+    lockOnSystemEvents: "settings.systemLock",
+    lockClosesSessions: "settings.lockSessions",
+    clipboardClearSeconds: "settings.clipboard",
+    oidcReauthMinutes: "settings.oidcReauth",
+  };
+
+  function settingValue(c: SettingChange, value: number | boolean): string {
+    if (c.setting === "lockClosesSessions") return t(value ? "settings.lockSessionsClose" : "settings.lockSessionsKeep");
+    if (typeof value === "boolean") return t(value ? "common.yes" : "common.no");
+    if (c.setting === "oidcReauthMinutes" && value === 0) return t("settings.oidcReauthAlways");
+    if (value === 0) return t("duration.never");
+    return c.setting === "clipboardClearSeconds" ? t("duration.seconds", { count: value }) : tn("duration.minutes", value);
+  }
+
   async function apply() {
     if (importBusy) return;
     importBusy = true;
     importError = "";
     try {
-      const r = await api.vaultImportApply(duplicates, importSettings);
+      const r = await api.vaultImportApply(duplicates, importKnownHosts, importSettings);
       importFile = null;
       preview = null;
       await reload();
@@ -237,10 +257,42 @@
           {/if}
         </fieldset>
       {/if}
+      {#if preview.hostKeys.length}
+        <fieldset>
+          <legend>{t("backup.hostKeysTitle")}</legend>
+          <ul class="changes">
+            {#each preview.hostKeys as k (k.hostname + ":" + k.port)}
+              <li>
+                <span class="mono">{displayName(k.hostname)}:{k.port}</span>
+                <span class="faint">{k.algorithm}</span>
+                <span class="mono fp">{k.fingerprint}</span>
+                {#if k.replaces}<span class="warn">{t("backup.hostKeysReplaces")}</span>{/if}
+              </li>
+            {/each}
+          </ul>
+          <label class="check">
+            <input type="checkbox" bind:checked={importKnownHosts} /> {t("backup.approveHostKeys")}
+          </label>
+          <small class="note">{t("backup.approveHostKeysHint")}</small>
+        </fieldset>
+      {/if}
       {#if preview.settings}
         <label class="check">
           <input type="checkbox" bind:checked={importSettings} /> {t("backup.applySettings")}
         </label>
+        {#if preview.securityChanges.length}
+          <div class="note">
+            {t("backup.securityChanges")}
+            <ul class="changes">
+              {#each preview.securityChanges as c (c.setting)}
+                <li>
+                  {t(SETTING_LABELS[c.setting])} : {settingValue(c, c.current)} → {settingValue(c, c.imported)}
+                  {#if c.weaker}<span class="warn">{t("backup.weaker")}</span>{/if}
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
       {/if}
     {/if}
     {#if importError}<p class="error-text">{importError}</p>{/if}
@@ -258,6 +310,27 @@
 {/if}
 
 <style>
+  .changes {
+    margin: 6px 0 8px;
+    padding-left: 0;
+    list-style: none;
+    max-height: 160px;
+    overflow-y: auto;
+    font-size: 12.5px;
+  }
+  .changes li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding: 3px 0;
+  }
+  .changes .fp {
+    word-break: break-all;
+  }
+  .warn {
+    color: var(--warning, #d97706);
+    font-weight: 600;
+  }
   .card {
     padding: 20px 22px;
     background: var(--surface);

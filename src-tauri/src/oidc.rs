@@ -222,6 +222,9 @@ pub struct Identity {
     /// Trop de groupes pour le jeton (Entra) : ils ne sont pas transmis.
     #[serde(skip)]
     groups_overage: bool,
+    /// Connexion par navigateur dont le jeton ne dit pas quand l'utilisateur s'est
+    /// authentifié (`auth_time` absent) : la réauthentification n'a pas pu être vérifiée.
+    pub reauth_unverified: bool,
 }
 
 impl Identity {
@@ -235,6 +238,8 @@ impl Identity {
 struct IdClaims {
     sub: String,
     nonce: Option<String>,
+    /// Heure de l'authentification de l'utilisateur chez le fournisseur.
+    auth_time: Option<u64>,
     name: Option<String>,
     preferred_username: Option<String>,
     email: Option<String>,
@@ -255,6 +260,7 @@ impl IdClaims {
             email: self.email,
             groups,
             groups_overage,
+            reauth_unverified: false,
         }
     }
 }
@@ -321,6 +327,11 @@ async fn authenticate(app: &AppHandle, cfg: &ClientConfig) -> CmdResult<(Identit
     let state = random_token();
     let nonce = random_token();
     let redirect = redirect_uri(port);
+    // Délai de grâce (réglage) : dans ce délai après la dernière connexion par le
+    // navigateur, la session du fournisseur suffit ; sinon, nouvelle connexion.
+    let grace = app.state::<AppState>().oidc_grace_window();
+    let force_login = grace.is_none();
+    let max_age = grace.map_or(MAX_AUTH_AGE, |g| g.as_secs());
 
     let listener = TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| {
         oidc_err(tr!("err.oidc.portUnavailable", port = port, detail = e))
@@ -336,7 +347,16 @@ async fn authenticate(app: &AppHandle, cfg: &ClientConfig) -> CmdResult<(Identit
         .append_pair("state", &state)
         .append_pair("nonce", &nonce)
         .append_pair("code_challenge", &challenge)
-        .append_pair("code_challenge_method", "S256");
+        .append_pair("code_challenge_method", "S256")
+        // Âge maximal de l'authentification chez le fournisseur (OpenID Connect Core
+        // §3.1.2.1), vérifié ensuite avec `auth_time` (fresh_login).
+        .append_pair("max_age", &max_age.to_string());
+    // Hors délai de grâce, nouvelle authentification exigée : une session déjà ouverte
+    // dans le navigateur ne suffit pas. Google refuse les valeurs de `prompt` autres
+    // que none, consent et select_account (seul `max_age` s'applique alors).
+    if force_login && cfg.provider.as_deref() != Some("google") {
+        auth_url.query_pairs_mut().append_pair("prompt", "login");
+    }
 
     let (cancel_tx, cancel_rx) = oneshot::channel();
     app.state::<OidcState>().set_cancel(cancel_tx);
@@ -358,8 +378,17 @@ async fn authenticate(app: &AppHandle, cfg: &ClientConfig) -> CmdResult<(Identit
     drop(listener);
     let reply = BrowserReply { stream, app: app.clone() };
 
-    match exchange_code(&http, &doc, cfg, &code, &redirect, &verifier, &nonce).await {
-        Ok(identity) => Ok((identity, reply)),
+    let checked = exchange_code(&http, &doc, cfg, &code, &redirect, &verifier, &nonce)
+        .await
+        .and_then(|(identity, auth_time)| {
+            let reauth_unverified = fresh_login(auth_time, now_secs(), max_age, &name)?;
+            Ok(Identity { reauth_unverified, ..identity })
+        });
+    match checked {
+        Ok(identity) => {
+            app.state::<AppState>().record_oidc_login();
+            Ok((identity, reply))
+        }
         Err(e) => {
             reply.send(Some(&e), "").await;
             Err(e)
@@ -367,7 +396,8 @@ async fn authenticate(app: &AppHandle, cfg: &ClientConfig) -> CmdResult<(Identit
     }
 }
 
-/// Échange le code contre le jeton d'identité, puis le vérifie.
+/// Échange le code contre le jeton d'identité, puis le vérifie. Renvoie aussi l'heure
+/// de l'authentification chez le fournisseur (`auth_time`), contrôlée par l'appelant.
 async fn exchange_code(
     http: &reqwest::Client,
     doc: &Discovery,
@@ -376,7 +406,7 @@ async fn exchange_code(
     redirect: &str,
     verifier: &str,
     nonce: &str,
-) -> CmdResult<Identity> {
+) -> CmdResult<(Identity, Option<u64>)> {
     let mut form = vec![
         ("grant_type", "authorization_code"),
         ("code", code),
@@ -407,7 +437,28 @@ async fn exchange_code(
     if claims.nonce.as_deref() != Some(nonce) {
         return Err(oidc_err(tr!("err.oidc.nonceReplay")));
     }
-    Ok(claims.into_identity(&cfg.groups_claim))
+    let auth_time = claims.auth_time;
+    Ok((claims.into_identity(&cfg.groups_claim), auth_time))
+}
+
+/// Délai maximal depuis l'authentification chez le fournisseur quand une nouvelle
+/// connexion est exigée : le temps de se connecter. Une marge d'une minute couvre en
+/// plus les horloges décalées.
+const MAX_AUTH_AGE: u64 = 300;
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// Vérifie que l'utilisateur s'est authentifié il y a moins de `max_age` secondes. `Ok(true)` si le fournisseur ne
+/// donne pas l'heure (`auth_time` absent) : accepté, mais signalé à l'activation.
+fn fresh_login(auth_time: Option<u64>, now: u64, max_age: u64, provider: &str) -> CmdResult<bool> {
+    let Some(auth_time) = auth_time else { return Ok(true) };
+    let age = now.saturating_sub(auth_time);
+    if age > max_age + 60 {
+        return Err(oidc_err(tr!("err.oidc.staleLogin", provider = provider, minutes = age / 60)));
+    }
+    Ok(false)
 }
 
 // ───────────────────────── Connexion depuis un téléphone ─────────────────────────
@@ -1098,6 +1149,20 @@ mod tests {
     }
 
     #[test]
+    fn login_must_be_recent() {
+        let now = 1_000_000;
+        let m = MAX_AUTH_AGE;
+        assert!(!fresh_login(Some(now - 30), now, m, "X").unwrap());
+        assert!(!fresh_login(Some(now - m - 60), now, m, "X").unwrap(), "marge d'horloge");
+        assert!(fresh_login(Some(now - m - 61), now, m, "X").is_err());
+        assert!(fresh_login(Some(now + 30), now, m, "X").is_ok(), "horloge du fournisseur en avance");
+        assert!(fresh_login(None, now, m, "X").unwrap(), "non vérifiable : signalé");
+        // Délai de grâce de 15 minutes : une connexion d'il y a 10 minutes suffit.
+        assert!(!fresh_login(Some(now - 600), now, 900, "X").unwrap());
+        assert!(fresh_login(Some(now - 1000), now, 900, "X").is_err());
+    }
+
+    #[test]
     fn group_check() {
         let id = Identity {
             subject: "s".into(),
@@ -1105,6 +1170,7 @@ mod tests {
             email: None,
             groups: vec!["admins".into(), "/equipe/ops".into()],
             groups_overage: false,
+            reauth_unverified: false,
         };
         assert!(check_group(&id, None).is_ok());
         assert!(check_group(&id, Some("admins")).is_ok());
@@ -1281,6 +1347,7 @@ mod tests {
             email: Some("a@example.org".into()),
             groups: vec![],
             groups_overage: false,
+            reauth_unverified: false,
         };
         assert_eq!(id.display(), "s", "jamais l'adresse e-mail");
     }

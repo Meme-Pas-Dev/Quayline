@@ -46,10 +46,32 @@ fn text_in(lang: u8, key: &str, params: &[(&str, &dyn Display)]) -> String {
     let catalogs = &*CATALOGS;
     let lang = lang as usize;
     let raw = catalogs[lang].get(key).or_else(|| catalogs[EN as usize].get(key)).map_or(key, String::as_str);
-    let mut out = raw.to_string();
-    for (name, value) in params {
-        out = out.replace(&format!("{{{name}}}"), &value.to_string());
+    substitute(raw, params)
+}
+
+/// Remplace les « {nom} » en une seule passe : une valeur qui contient elle-même
+/// « {autre} » (nom d'hôte, message d'un serveur) n'est pas réinterprétée.
+fn substitute(raw: &str, params: &[(&str, &dyn Display)]) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut rest = raw;
+    while let Some(start) = rest.find('{') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        match after.find('}').and_then(|end| {
+            let name = &after[..end];
+            params.iter().find(|(n, _)| *n == name).map(|(_, v)| (end, v))
+        }) {
+            Some((end, value)) => {
+                out.push_str(&value.to_string());
+                rest = &after[end + 1..];
+            }
+            None => {
+                out.push('{');
+                rest = after;
+            }
+        }
     }
+    out.push_str(rest);
     out
 }
 
@@ -88,6 +110,13 @@ pub fn set_language(app: tauri::AppHandle, language: String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parameters_are_substituted_once() {
+        let host: &dyn Display = &"{port}";
+        let port: &dyn Display = &22;
+        assert_eq!(substitute("{host}:{port} {inconnu} {", &[("host", host), ("port", port)]), "{port}:22 {inconnu} {");
+    }
 
     /// Toutes les clés employées par `tr!` dans le backend existent dans chaque catalogue.
     #[test]
