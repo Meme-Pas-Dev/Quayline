@@ -329,9 +329,11 @@ async fn authenticate(app: &AppHandle, cfg: &ClientConfig) -> CmdResult<(Identit
     let redirect = redirect_uri(port);
     // Délai de grâce (réglage) : dans ce délai après la dernière connexion par le
     // navigateur, la session du fournisseur suffit ; sinon, nouvelle connexion.
-    let grace = app.state::<AppState>().oidc_grace_window();
-    let force_login = grace.is_none();
-    let max_age = grace.map_or(MAX_AUTH_AGE, |g| g.as_secs());
+    // Dans ce délai, aucun âge maximal n'est demandé au fournisseur : c'est Quayline qui
+    // compte depuis la dernière connexion. Pocket ID semble appliquer `max_age` à
+    // l'ouverture de sa session dans le navigateur (parfois vieille de plusieurs jours) :
+    // il redemandait alors la clé d'accès à chaque fois.
+    let force_login = app.state::<AppState>().oidc_grace_window().is_none();
 
     let listener = TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| {
         oidc_err(tr!("err.oidc.portUnavailable", port = port, detail = e))
@@ -347,26 +349,25 @@ async fn authenticate(app: &AppHandle, cfg: &ClientConfig) -> CmdResult<(Identit
         .append_pair("state", &state)
         .append_pair("nonce", &nonce)
         .append_pair("code_challenge", &challenge)
-        .append_pair("code_challenge_method", "S256")
-        // Âge maximal de l'authentification chez le fournisseur (OpenID Connect Core
-        // §3.1.2.1), vérifié ensuite avec `auth_time` (fresh_login).
-        .append_pair("max_age", &max_age.to_string());
+        .append_pair("code_challenge_method", "S256");
     // Hors délai de grâce, nouvelle authentification exigée : une session déjà ouverte
-    // dans le navigateur ne suffit pas. Google refuse les valeurs de `prompt` autres
-    // que none, consent et select_account (seul `max_age` s'applique alors).
-    if force_login && cfg.provider.as_deref() != Some("google") {
-        auth_url.query_pairs_mut().append_pair("prompt", "login");
+    // dans le navigateur ne suffit pas. Âge maximal de l'authentification (OpenID
+    // Connect Core §3.1.2.1), vérifié ensuite avec `auth_time` (fresh_login). Google
+    // refuse les valeurs de `prompt` autres que none, consent et select_account (seul
+    // `max_age` s'applique alors).
+    if force_login {
+        auth_url.query_pairs_mut().append_pair("max_age", &MAX_AUTH_AGE.to_string());
+        if cfg.provider.as_deref() != Some("google") {
+            auth_url.query_pairs_mut().append_pair("prompt", "login");
+        }
     }
 
     let (cancel_tx, cancel_rx) = oneshot::channel();
     app.state::<OidcState>().set_cancel(cancel_tx);
 
-    let url = auth_url.to_string();
-    tauri::async_runtime::spawn_blocking(move || open::that_detached(url))
-        .await
-        .ok()
-        .and_then(|r| r.ok())
-        .ok_or_else(|| oidc_err(tr!("err.oidc.browser")))?;
+    if !open_browser(app, auth_url.to_string()).await {
+        return Err(oidc_err(tr!("err.oidc.browser")));
+    }
 
     let name = cfg.name();
     let (code, stream) = tokio::select! {
@@ -381,7 +382,11 @@ async fn authenticate(app: &AppHandle, cfg: &ClientConfig) -> CmdResult<(Identit
     let checked = exchange_code(&http, &doc, cfg, &code, &redirect, &verifier, &nonce)
         .await
         .and_then(|(identity, auth_time)| {
-            let reauth_unverified = fresh_login(auth_time, now_secs(), max_age, &name)?;
+            let reauth_unverified = if force_login {
+                fresh_login(auth_time, now_secs(), MAX_AUTH_AGE, &name)?
+            } else {
+                auth_time.is_none()
+            };
             Ok(Identity { reauth_unverified, ..identity })
         });
     match checked {
@@ -1130,6 +1135,18 @@ pub fn oidc_cancel(oidc: State<'_, OidcState>) {
     if let Some(tx) = oidc.cancel.lock().unwrap_or_else(|p| p.into_inner()).take() {
         let _ = tx.send(());
     }
+}
+
+/// Ouvre la page de connexion dans le navigateur par défaut. Sous Linux, d'abord par GIO
+/// (navigateur au premier plan sous Wayland, voir platform/linux/launch.rs).
+async fn open_browser(app: &AppHandle, url: String) -> bool {
+    #[cfg(target_os = "linux")]
+    if crate::platform::launch::open_uri(app, url.clone()).await {
+        return true;
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = app;
+    matches!(tauri::async_runtime::spawn_blocking(move || open::that_detached(url)).await, Ok(Ok(())))
 }
 
 #[cfg(test)]

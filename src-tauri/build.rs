@@ -104,6 +104,7 @@ fn main() {
             "sftp_mkdir",
             "sftp_rename",
             "sftp_delete",
+            "app_reset",
             "sftp_read_text",
             "sftp_write_text",
             "edits_subscribe",

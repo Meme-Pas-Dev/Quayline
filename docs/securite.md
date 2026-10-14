@@ -159,6 +159,23 @@ phrase de passe ──Argon2id (256 Mio, 3 passes)──▶ clé ──XChaCha20
 - **Permissions** : modification des bits `0o7777` seulement (jamais à travers un lien
   symbolique pour les fichiers locaux ; pas sous Windows, qui utilise des ACL).
 
+## Réinitialisation
+
+- Réglages → Données → « Réinitialiser Quayline » (`reset.rs`) : coffre ouvert,
+  **mot de passe maître exigé** (même temporisation qu'au déverrouillage, même si le
+  coffre a été ouvert par FIDO2 ou OIDC) et mot à taper (REINITIALISER / RESET,
+  vérifié par l'interface). Jamais depuis l'écran de verrouillage : une personne de
+  passage ne doit pas pouvoir tout effacer.
+- Ordre : modifications externes arrêtées, sessions fermées, coffre verrouillé (clé de
+  données effacée, verrou du fichier relâché), puis suppression du fichier du coffre
+  (échec = arrêt, le coffre reste utilisable), de son `.lock`, des fichiers temporaires
+  d'un enregistrement interrompu, des coffres laissés sous un ancien identifiant (sinon
+  repris au démarrage), des copies locales et de la clé du fournisseur d'identité dans
+  le trousseau. Les fichiers restés en place sont signalés. L'interface efface ses
+  préférences (`quayline.*` du stockage local) et revient à la création du coffre.
+- Mot de passe oublié : procédure manuelle dans le README public (dossier de données
+  par système, entrée du trousseau).
+
 ## Fournisseur d'identité (OIDC)
 
 Pocket ID, Authentik, Authelia, Keycloak, Microsoft Entra ID, Google, ou tout fournisseur
@@ -224,7 +241,10 @@ authentification (`prompt=login`, sauf Google qui ne l'accepte pas) datant de mo
 5 minutes (`max_age=300`), et Quayline vérifie l'heure `auth_time` du jeton (marge d'une
 minute). **Délai de grâce** (réglage « Nouvelle connexion au fournisseur d'identité »,
 15 minutes par défaut, 0 à 60) : dans ce délai après la dernière connexion par le
-navigateur, la session du fournisseur suffit (un clic), avec `max_age` égal au délai.
+navigateur, la session du fournisseur suffit (un clic), sans `prompt` ni `max_age` :
+c'est Quayline qui compte le délai (un `max_age` égal au délai faisait redemander la clé
+d'accès par Pocket ID, qui semble l'appliquer à l'ouverture de sa session dans le
+navigateur, parfois vieille de plusieurs jours).
 Le délai est compté depuis la dernière connexion réussie, en mémoire seulement : après
 un redémarrage de l'application, une nouvelle connexion est exigée. Compromis assumé :
 pendant ce délai, une personne devant le poste (session du bureau ouverte, Quayline

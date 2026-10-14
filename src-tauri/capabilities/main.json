@@ -50,6 +50,7 @@
     "allow-sftp-mkdir",
     "allow-sftp-rename",
     "allow-sftp-delete",
+    "allow-app-reset",
     "allow-sftp-read-text",
     "allow-sftp-write-text",
     "allow-edits-subscribe",

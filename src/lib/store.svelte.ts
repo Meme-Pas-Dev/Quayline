@@ -40,6 +40,11 @@ export function setLockedHandler(fn: () => void) {
   onLocked = fn;
 }
 
+/** Retour à l'écran de verrouillage (ou de création, après une réinitialisation). */
+export function notifyLocked() {
+  onLocked();
+}
+
 /** Erreur commune : si le coffre s'est verrouillé entre-temps, retour à l'écran de verrouillage. */
 export function handleError(e: unknown) {
   if (errorCode(e) === "locked") onLocked();

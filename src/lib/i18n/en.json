@@ -842,5 +842,19 @@
   "editor.externalOpened": "{name}: each save will be sent to the server.",
   "editor.externalConflictToast": "{name} was modified on the server in the meantime: sending paused.",
   "editor.externalConflictMessage": "{name} was modified on the server since it was opened. Replace it with your version? Otherwise, your changes will no longer be sent.",
-  "err.edit.unencodable": "“{char}” cannot be saved in {encoding}: remove it, or save the file with the default application."
+  "err.edit.unencodable": "“{char}” cannot be saved in {encoding}: remove it, or save the file with the default application.",
+  "err.reset.vault": "The vault could not be deleted: {detail}",
+  "reset.title": "Reset Quayline",
+  "reset.description": "Erases all Quayline data on this computer, as after a fresh installation.",
+  "reset.open": "Reset…",
+  "reset.dialogTitle": "Reset Quayline?",
+  "reset.deleted": "Will be erased: the vault (hosts, credentials, keys, known host keys, settings), open sessions, the identity provider key stored in the system keychain and the interface preferences.",
+  "reset.kept": "Not affected: your files, your exports, the ~/.ssh folder and the application itself. Credentials registered on a security key stay on the key, without effect.",
+  "reset.exportHint": "This cannot be undone. Consider making an encrypted export first.",
+  "reset.exportFirst": "Export first…",
+  "reset.password": "Master password",
+  "reset.word": "RESET",
+  "reset.typeWord": "Type {word} to confirm",
+  "reset.confirm": "Erase everything",
+  "reset.leftovers": "Quayline was reset, but these files could not be deleted: {paths}"
 }

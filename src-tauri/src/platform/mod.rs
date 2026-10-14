@@ -12,7 +12,7 @@
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
-pub use linux::{hardening, keyring, portal, session};
+pub use linux::{hardening, keyring, launch, portal, session};
 
 #[cfg(target_os = "macos")]
 mod macos;

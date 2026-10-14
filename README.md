@@ -124,6 +124,20 @@ vault is stored in `%APPDATA%\dev.memepas.quayline\`.
 - **FIDO2 security keys**: Settings → Security → Security keys → Add a key. No secret is stored:
   the key recomputes it at each unlock. Register a second key as a backup.
 - **Backup**: Settings → Data → Backup and transfer (encrypted export and import).
+- **Reset**: Settings → Data → Reset Quayline erases all data (vault open, master
+  password required). Make an encrypted export first.
+- **Forgotten master password**: the vault cannot be recovered. To start over, quit
+  Quayline and delete its data folder:
+
+  | System | Folder |
+  |---|---|
+  | Fedora (RPM, COPR) | `~/.local/share/dev.memepas.quayline` |
+  | Flatpak | `~/.var/app/dev.memepas.quayline` |
+  | macOS | `~/Library/Application Support/dev.memepas.quayline` |
+  | Windows | `%APPDATA%\dev.memepas.quayline` |
+
+  If identity provider unlock was enabled, also delete the Quayline entry from the
+  system keychain (GNOME Keyring / KWallet, Keychain Access, Credential Manager).
 - **Shortcuts**: `Ctrl+Shift+L` (`Cmd+Shift+L` on macOS) locks;
   `Ctrl+Shift+C` / `Ctrl+Shift+V` (`Cmd+C` / `Cmd+V` on macOS) copy and paste in the
   terminal. Right-click a session
@@ -312,6 +326,21 @@ PIN, toucher). Le coffre est rangé dans `%APPDATA%\dev.memepas.quayline\`.
   Enregistrez une seconde clé en secours.
 - **Sauvegarde** : Réglages → Données → Sauvegarde et transfert (export et import
   chiffrés).
+- **Réinitialisation** : Réglages → Données → Réinitialiser Quayline efface toutes les
+  données (coffre ouvert, mot de passe maître exigé). Faites d'abord un export chiffré.
+- **Mot de passe maître oublié** : le coffre ne peut pas être récupéré. Pour repartir de
+  zéro, quittez Quayline et supprimez son dossier de données :
+
+  | Système | Dossier |
+  |---|---|
+  | Fedora (RPM, COPR) | `~/.local/share/dev.memepas.quayline` |
+  | Flatpak | `~/.var/app/dev.memepas.quayline` |
+  | macOS | `~/Library/Application Support/dev.memepas.quayline` |
+  | Windows | `%APPDATA%\dev.memepas.quayline` |
+
+  Si le déverrouillage par fournisseur d'identité était activé, supprimez aussi l'entrée
+  Quayline du trousseau du système (Trousseau GNOME / KWallet, Trousseau d'accès,
+  Gestionnaire d'identifiants).
 - **Raccourcis** : `Ctrl+Maj+L` (`Cmd+Maj+L` sur macOS) verrouille ;
   `Ctrl+Maj+C` / `Ctrl+Maj+V` (`Cmd+C` / `Cmd+V` sur macOS) copient et collent dans le
   terminal. Clic droit sur une

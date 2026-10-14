@@ -303,6 +303,8 @@ export const api = {
   vaultCreate: (password: string) => invoke<void>("vault_create", { password }),
   vaultUnlock: (password: string) => invoke<void>("vault_unlock", { password }),
   vaultLock: () => invoke<void>("vault_lock"),
+  /** Efface toutes les données ; renvoie les fichiers restés en place. */
+  appReset: (password: string) => invoke<string[]>("app_reset", { password }),
   vaultTouch: () => invoke<void>("vault_touch"),
   vaultChangePassword: (current: string, next: string) =>
     invoke<void>("vault_change_password", { current, new: next }),

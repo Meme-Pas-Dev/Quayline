@@ -32,7 +32,7 @@
     !nothingSelected && passphrase.length >= 12 && passphrase === passphraseConfirm && master.length > 0,
   );
 
-  function openExport() {
+  export function openExport() {
     passphrase = passphraseConfirm = master = exportError = "";
     exporting = true;
   }

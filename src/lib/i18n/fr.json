@@ -842,5 +842,19 @@
   "editor.externalOpened": "{name} : chaque enregistrement sera envoyé au serveur.",
   "editor.externalConflictToast": "{name} a été modifié sur le serveur entre-temps : envoi suspendu.",
   "editor.externalConflictMessage": "{name} a été modifié sur le serveur depuis son ouverture. Le remplacer par votre version ? Sinon, vos modifications ne seront plus envoyées.",
-  "err.edit.unencodable": "« {char} » ne peut pas être enregistré en {encoding} : retirez-le, ou enregistrez le fichier avec l'application par défaut."
+  "err.edit.unencodable": "« {char} » ne peut pas être enregistré en {encoding} : retirez-le, ou enregistrez le fichier avec l'application par défaut.",
+  "err.reset.vault": "Le coffre n'a pas pu être supprimé : {detail}",
+  "reset.title": "Réinitialiser Quayline",
+  "reset.description": "Efface toutes les données de Quayline sur cet ordinateur, comme après une installation neuve.",
+  "reset.open": "Réinitialiser…",
+  "reset.dialogTitle": "Réinitialiser Quayline ?",
+  "reset.deleted": "Seront effacés : le coffre (hôtes, identifiants, clés, clés d'hôte connues, réglages), les sessions ouvertes, la clé du fournisseur d'identité rangée dans le trousseau du système et les préférences de l'interface.",
+  "reset.kept": "Ne sont pas touchés : vos fichiers, vos exports, le dossier ~/.ssh et l'application elle-même. Les identifiants enregistrés sur une clé de sécurité restent sur la clé, sans effet.",
+  "reset.exportHint": "Cette opération est irréversible. Pensez à faire d'abord un export chiffré.",
+  "reset.exportFirst": "Exporter d'abord…",
+  "reset.password": "Mot de passe maître",
+  "reset.word": "REINITIALISER",
+  "reset.typeWord": "Tapez {word} pour confirmer",
+  "reset.confirm": "Tout effacer",
+  "reset.leftovers": "Quayline a été réinitialisé, mais ces fichiers n'ont pas pu être supprimés : {paths}"
 }

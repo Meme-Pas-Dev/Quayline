@@ -6,6 +6,61 @@ used as the text of its GitHub release.
 Chaque version est décrite en anglais, puis en français. La section d'une version sert
 de texte à sa release GitHub.
 
+## [1.10.0] - 2026-10-14
+
+### English
+
+**Added**
+- Settings → Data → “Reset Quayline”: erases all data on this computer (vault, open
+  sessions, identity provider key in the system keychain, interface preferences), as
+  after a fresh installation. Vault open, master password and a typed confirmation
+  required; never from the lock screen. The README explains what to delete by hand if
+  the master password is forgotten.
+
+**Security**
+- rustls updated to 0.23.46 (RUSTSEC-2026-0346, RUSTSEC-2026-0347). Quayline neither
+  prints TLS session values nor uses ECH: no known impact.
+
+**Changed**
+- Settings always open on the General tab; the chosen tab is kept only while the page
+  stays open.
+
+**Fixed**
+- Identity provider: within the grace period, Pocket ID no longer asks for the passkey
+  again when its browser session is older than the grace period (Quayline no longer
+  sends `max_age` within the grace period; it counts the period itself).
+- Linux (Wayland): the identity provider's sign-in page now opens in front of Quayline
+  instead of behind it.
+- Settings: the content no longer shifts sideways when switching between tabs of
+  different lengths (space for the scrollbar is always reserved).
+
+### Français
+
+**Ajouté**
+- Réglages → Données → « Réinitialiser Quayline » : efface toutes les données sur cet
+  ordinateur (coffre, sessions ouvertes, clé du fournisseur d'identité dans le
+  trousseau, préférences de l'interface), comme après une installation neuve. Coffre
+  ouvert, mot de passe maître et mot de confirmation exigés ; jamais depuis l'écran de
+  verrouillage. Le README indique quoi supprimer à la main en cas de mot de passe
+  maître oublié.
+
+**Sécurité**
+- rustls mis à jour en 0.23.46 (RUSTSEC-2026-0346, RUSTSEC-2026-0347). Quayline
+  n'affiche pas les valeurs de session TLS et n'utilise pas ECH : pas d'effet connu.
+
+**Modifié**
+- Les réglages s'ouvrent toujours sur l'onglet Général ; l'onglet choisi n'est gardé
+  que tant que la page reste ouverte.
+
+**Corrigé**
+- Fournisseur d'identité : dans le délai de grâce, Pocket ID ne redemande plus la clé
+  d'accès quand sa session dans le navigateur est plus ancienne que le délai (Quayline
+  n'envoie plus `max_age` dans le délai ; il le compte lui-même).
+- Linux (Wayland) : la page de connexion du fournisseur d'identité s'ouvre devant
+  Quayline au lieu de derrière.
+- Réglages : le contenu ne se décale plus en passant d'un onglet à l'autre (place de la
+  barre de défilement toujours réservée).
+
 ## [1.9.0] - 2026-10-13
 
 ### English
@@ -29,8 +84,6 @@ de texte à sa release GitHub.
 - Before sending, Quayline checks that the file was not modified on the server in the
   meantime, and asks before replacing it. The file is replaced through a temporary file
   renamed into place, keeping its permissions.
-- `scripts/manage.sh` (Fedora): the Flatpak can now be compiled from the clone
-  (flatpak-builder), like the RPM, without waiting for a release.
 
 **Fixed**
 - SFTP browser: opening a file's menu now closes the one open in the other pane, and
@@ -60,8 +113,6 @@ de texte à sa release GitHub.
 - Avant l'envoi, Quayline vérifie que le fichier n'a pas été modifié sur le serveur
   entre-temps, et demande avant de le remplacer. Le fichier est remplacé par un fichier
   temporaire renommé, en gardant ses permissions.
-- `scripts/manage.sh` (Fedora) : le Flatpak peut maintenant être compilé depuis le
-  clone (flatpak-builder), comme le RPM, sans attendre une release.
 
 **Corrigé**
 - Explorateur SFTP : ouvrir le menu d'un fichier ferme celui resté ouvert dans l'autre

@@ -8,6 +8,7 @@ mod i18n;
 mod identity;
 mod oidc;
 mod platform;
+mod reset;
 mod sftp;
 mod sftp_edit;
 mod ssh;
@@ -22,7 +23,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use state::AppState;
 
-const VAULT_FILE: &str = "vault.qlv";
+pub(crate) const VAULT_FILE: &str = "vault.qlv";
 
 /// Le dossier de données (coffre + cache WebKit) n'est lisible que par l'utilisateur.
 fn restrict_dir(dir: &std::path::Path) -> std::io::Result<()> {
@@ -172,6 +173,7 @@ pub fn run() {
             commands::vault_create,
             commands::vault_unlock,
             commands::vault_lock,
+            reset::app_reset,
             commands::vault_touch,
             commands::vault_change_password,
             backup::vault_export,

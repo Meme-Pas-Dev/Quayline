@@ -10,6 +10,7 @@
   import OidcSettings from "../components/OidcSettings.svelte";
   import SecurityKeySettings from "../components/SecurityKeySettings.svelte";
   import BackupSettings from "../components/BackupSettings.svelte";
+  import ResetSettings from "../components/ResetSettings.svelte";
   import { data, handleError } from "../store.svelte";
   import { TERMINAL_THEMES } from "../terminalThemes";
   import { setThemePreference, themePreference, type ThemePreference } from "../appearance";
@@ -38,7 +39,8 @@
   /** Largeur du contenu des réglages (px), centré dans la fenêtre. */
   const CONTENT_WIDTH = 760;
 
-  // Onglets par thème ; le dernier ouvert est retenu (stockage local de la fenêtre).
+  // Onglets par thème. Les réglages s'ouvrent toujours sur Général ; l'onglet choisi
+  // n'est gardé que tant que la page reste ouverte.
   type Tab = "general" | "security" | "terminal" | "data" | "about";
   const TABS: [Tab, MessageKey][] = [
     ["general", "settings.tab.general"],
@@ -47,24 +49,16 @@
     ["data", "settings.tab.data"],
     ["about", "settings.tab.about"],
   ];
-  const TAB_KEY = "quayline.settings.tab";
-  function readTab(): Tab {
-    try {
-      const v = localStorage.getItem(TAB_KEY);
-      if (TABS.some(([id]) => id === v)) return v as Tab;
-    } catch {
-      // Stockage indisponible : premier onglet.
-    }
-    return "general";
+  try {
+    // Onglet mémorisé par les versions 1.8.1 à 1.9.0 : plus utilisé.
+    localStorage.removeItem("quayline.settings.tab");
+  } catch {
+    // Stockage indisponible : rien à nettoyer.
   }
-  let tab = $state<Tab>(readTab());
+  let tab = $state<Tab>("general");
+  let backup = $state<ReturnType<typeof BackupSettings>>();
   function selectTab(id: Tab) {
     tab = id;
-    try {
-      localStorage.setItem(TAB_KEY, id);
-    } catch {
-      // Non mémorisé.
-    }
   }
   let languageChoice = $state<LanguagePreference>(languagePreference());
 
@@ -378,7 +372,8 @@
     {/each}
   </section>
 
-  <BackupSettings knownHostsCount={knownHosts.length} onimported={refreshAfterImport} />
+  <BackupSettings bind:this={backup} knownHostsCount={knownHosts.length} onimported={refreshAfterImport} />
+  <ResetSettings onexport={() => backup?.openExport()} />
   {:else}
   {#if about}
     <section class="card about">

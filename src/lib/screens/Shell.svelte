@@ -447,7 +447,11 @@
   .page {
     position: absolute;
     inset: 0;
-    overflow: auto;
+    /* Barre verticale toujours présente (fond transparent, voir app.css) : le contenu
+       centré ne se décale pas d'un onglet des réglages à l'autre. scrollbar-gutter
+       n'est pas appliqué par WebKit (macOS) aux barres personnalisées. */
+    overflow-x: auto;
+    overflow-y: scroll;
   }
   .page.hidden {
     visibility: hidden;
