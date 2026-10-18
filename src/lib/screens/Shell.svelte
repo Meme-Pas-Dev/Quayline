@@ -13,6 +13,8 @@
     disconnectSession,
     handleError,
     openFromSession,
+    openLocalTerminal,
+    loadCaps,
     reconnect,
     reload,
     sessionHost,
@@ -79,9 +81,13 @@
     }
     // Ctrl+L reste au terminal (effacer l'écran) : le verrouillage est sur Ctrl+Maj+L
     // (Cmd+Maj+L sur macOS).
-    if (shortcut(e) === "lock") {
+    const action = shortcut(e);
+    if (action === "lock") {
       e.preventDefault();
       onlock();
+    } else if (action === "localTerm") {
+      e.preventDefault();
+      openLocalTerminal();
     }
   }
 
@@ -105,6 +111,7 @@
   onMount(() => {
     setLockedHandler(onlocked);
     reload();
+    loadCaps();
     subscribeTransfers();
     // Plus aucune donnée ni session côté interface une fois verrouillé.
     return resetSessionState;
@@ -139,8 +146,8 @@
             <button class="session-main" onclick={() => (ui.active = s.key)} title={t(statusLabel[s.status])}>
               <span class="dot {s.status}" class:pending={s.pending}></span>
               <span class="label">{s.label}</span>
-              <span class="kind" title={t(s.kind === "sftp" ? "shell.sftpBrowser" : "shell.sshTerminal")}>
-                <Icon name={s.kind === "sftp" ? "folder" : "terminal"} size={13} />
+              <span class="kind" title={t(s.kind === "sftp" ? "shell.sftpBrowser" : s.kind === "local" ? "localTerm.label" : "shell.sshTerminal")}>
+                <Icon name={s.kind === "sftp" ? "folder" : s.kind === "local" ? "laptop" : "terminal"} size={13} />
               </span>
             </button>
             <button class="close" onclick={() => closeSession(s.key)} aria-label={t("shell.closeSession")}>
@@ -202,8 +209,19 @@
 
 {#if menu && menuSession}
   <div class="context-menu" bind:this={menuEl} style:left="{menu.x}px" style:top="{menu.y}px" role="menu">
-    <div class="menu-head">{menuSession.label} · {menuSession.kind === "sftp" ? "SFTP" : "SSH"}</div>
-    {#if menuSession.kind === "ssh"}
+    <div class="menu-head">{menuSession.kind === "local" ? menuSession.label : `${menuSession.label} · ${menuSession.kind === "sftp" ? "SFTP" : "SSH"}`}</div>
+    {#if menuSession.kind === "local"}
+      <button role="menuitem" onclick={() => act(() => openLocalTerminal())}>
+        <Icon name="plus" size={15} /> {t("menu.newLocalTerminal")}
+      </button>
+      <div class="sep"></div>
+      <button role="menuitem" disabled={menuSession.status !== "closed"} onclick={() => act(reconnect)}>
+        <Icon name="refresh" size={15} /> {t("menu.restart")}
+      </button>
+      <button role="menuitem" class="danger" onclick={() => act(closeSession)}>
+        <Icon name="x" size={15} /> {t("menu.close")}
+      </button>
+    {:else if menuSession.kind === "ssh"}
       <button role="menuitem" disabled={!menuHost} onclick={() => act((k) => openFromSession(k, "other"))}>
         <Icon name="folder" size={15} /> {t("menu.openSftp")}
       </button>
@@ -212,6 +230,7 @@
         <Icon name="terminal" size={15} /> {t("menu.openSsh")}
       </button>
     {/if}
+    {#if menuSession.kind !== "local"}
     <button role="menuitem" disabled={!menuHost} onclick={() => act((k) => openFromSession(k, "same"))}>
       <Icon name="copy" size={15} /> {t("menu.duplicateSession")}
     </button>
@@ -225,6 +244,7 @@
     <button role="menuitem" class="danger" onclick={() => act(closeSession)}>
       <Icon name="x" size={15} /> {t("menu.close")}
     </button>
+    {/if}
   </div>
 {/if}
 

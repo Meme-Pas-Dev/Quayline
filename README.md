@@ -10,12 +10,17 @@ only.
 
 The interface is available in English and French (Settings → General → Language).
 
+Website: **[memepas.dev/en/quayline](https://memepas.dev/en/quayline/)** (screenshots,
+downloads for your system).
+
 ### Features
 
 - **Tabbed SSH terminal** and dual-pane **SFTP browser** (drag and drop, background
   transfers, permissions); each one opens from the other. Remote files can be edited in
   a built-in editor or in the system's default application, changes being sent back to
   the server.
+- **Local terminal** in a tab, next to SSH sessions (RPM, macOS and Windows; not in the
+  Flatpak, which stays isolated from the system).
 - **Encrypted vault** for servers, passwords and SSH keys, with encrypted export and
   import for backups or moving to another computer.
 - **Unlocking** with the master password, a **FIDO2 security key** (YubiKey,
@@ -138,7 +143,8 @@ vault is stored in `%APPDATA%\dev.memepas.quayline\`.
 
   If identity provider unlock was enabled, also delete the Quayline entry from the
   system keychain (GNOME Keyring / KWallet, Keychain Access, Credential Manager).
-- **Shortcuts**: `Ctrl+Shift+L` (`Cmd+Shift+L` on macOS) locks;
+- **Shortcuts**: `Ctrl+Shift+L` (`Cmd+Shift+L` on macOS) locks; `Ctrl+Shift+T`
+  (`Cmd+T` on macOS) opens a local terminal;
   `Ctrl+Shift+C` / `Ctrl+Shift+V` (`Cmd+C` / `Cmd+V` on macOS) copy and paste in the
   terminal. Right-click a session
   or a server for other actions.
@@ -209,12 +215,17 @@ machine uniquement.
 
 L'interface est en français et en anglais (Réglages → Général → Langue).
 
+Site : **[memepas.dev/fr/quayline](https://memepas.dev/fr/quayline/)** (captures d'écran,
+téléchargement pour votre système).
+
 ### Fonctionnalités
 
 - **Terminal SSH** à onglets, **explorateur SFTP** en double panneau (glisser-déposer,
   transferts en arrière-plan, permissions), ouverture de l'un depuis l'autre. Les
   fichiers distants se modifient dans un éditeur intégré ou dans l'application par
   défaut du système, les changements étant renvoyés au serveur.
+- **Terminal local** dans un onglet, à côté des sessions SSH (RPM, macOS et Windows ;
+  pas dans le Flatpak, qui reste isolé du système).
 - **Coffre chiffré** pour les serveurs, mots de passe et clés SSH, avec export et import
   chiffrés pour la sauvegarde ou le passage à un autre ordinateur.
 - **Déverrouillage** par mot de passe maître, par **clé de sécurité FIDO2** (YubiKey,
@@ -341,7 +352,8 @@ PIN, toucher). Le coffre est rangé dans `%APPDATA%\dev.memepas.quayline\`.
   Si le déverrouillage par fournisseur d'identité était activé, supprimez aussi l'entrée
   Quayline du trousseau du système (Trousseau GNOME / KWallet, Trousseau d'accès,
   Gestionnaire d'identifiants).
-- **Raccourcis** : `Ctrl+Maj+L` (`Cmd+Maj+L` sur macOS) verrouille ;
+- **Raccourcis** : `Ctrl+Maj+L` (`Cmd+Maj+L` sur macOS) verrouille ; `Ctrl+Maj+T`
+  (`Cmd+T` sur macOS) ouvre un terminal local ;
   `Ctrl+Maj+C` / `Ctrl+Maj+V` (`Cmd+C` / `Cmd+V` sur macOS) copient et collent dans le
   terminal. Clic droit sur une
   session ou un serveur pour les autres actions.

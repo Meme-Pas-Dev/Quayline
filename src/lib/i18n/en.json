@@ -856,5 +856,11 @@
   "reset.word": "RESET",
   "reset.typeWord": "Type {word} to confirm",
   "reset.confirm": "Erase everything",
-  "reset.leftovers": "Quayline was reset, but these files could not be deleted: {paths}"
+  "reset.leftovers": "Quayline was reset, but these files could not be deleted: {paths}",
+  "err.localTerm.flatpak": "The local terminal is not available in the Flatpak version, which is isolated from the system. It is available in the RPM (COPR repository), on macOS and on Windows.",
+  "err.localTerm.start": "Cannot start the local terminal: {detail}",
+  "localTerm.label": "Local terminal",
+  "localTerm.openTitle": "Open a terminal on this computer ({keys})",
+  "menu.restart": "Restart",
+  "menu.newLocalTerminal": "New local terminal"
 }

@@ -47,6 +47,7 @@ ctap-hid-fido2 = "3.6"
 arboard = { version = "3.6", default-features = false }
 # QR code de la connexion Pocket ID depuis un téléphone (matrice seule, sans image).
 qrcode = { version = "0.14", default-features = false }
+portable-pty = "0.9"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -6,6 +6,36 @@ used as the text of its GitHub release.
 Chaque version est décrite en anglais, puis en français. La section d'une version sert
 de texte à sa release GitHub.
 
+## [Unreleased]
+
+## [1.11.0] - 2026-10-18
+
+### English
+
+**Added**
+- Local terminal: a shell of this computer in a tab, next to SSH sessions (“Local
+  terminal” button on the Hosts page, `Ctrl+Shift+T` or `Cmd+T` on macOS). Your login
+  shell on Linux and macOS, PowerShell on Windows. It follows the “Sessions on lock”
+  setting. Not available in the Flatpak, which stays isolated from the system.
+
+**Changed**
+- The project website, [memepas.dev/en/quayline](https://memepas.dev/en/quayline/), is now
+  the homepage shown by software centres (AppStream) and by `dnf info quayline`, and is
+  linked from the README.
+
+### Français
+
+**Ajouté**
+- Terminal local : un shell de cet ordinateur dans un onglet, à côté des sessions SSH
+  (bouton « Terminal local » de la page Hôtes, `Ctrl+Maj+T` ou `Cmd+T` sur macOS). Votre
+  shell de connexion sous Linux et macOS, PowerShell sous Windows. Il suit le réglage
+  « Sessions au verrouillage ». Absent du Flatpak, qui reste isolé du système.
+
+**Modifié**
+- Le site du projet, [memepas.dev/fr/quayline](https://memepas.dev/fr/quayline/), est
+  désormais la page d'accueil affichée par les logithèques (AppStream) et par
+  `dnf info quayline`, et le README y renvoie.
+
 ## [1.10.0] - 2026-10-14
 
 ### English

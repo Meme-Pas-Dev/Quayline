@@ -56,6 +56,7 @@ pub async fn app_reset(app: AppHandle, password: Secret) -> CmdResult<Vec<String
     app.state::<crate::sftp_edit::EditManager>().stop_all();
     app.state::<crate::ssh::SshManager>().close_all();
     app.state::<crate::sftp::SftpManager>().close_all();
+    app.state::<crate::local_term::LocalTermManager>().close_all();
     state.lock();
     crate::clipboard::clear_now(&app);
 

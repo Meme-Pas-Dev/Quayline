@@ -1,5 +1,6 @@
 import { api, errorCode, errorMessage, type Host, type Identity, type Settings, type TransferEvent } from "./api";
 import { toast } from "./components/toast.svelte";
+import { t } from "./i18n/index.svelte";
 
 export const data = $state<{ hosts: Host[]; identities: Identity[]; settings: Settings | null; loaded: boolean }>({
   hosts: [],
@@ -13,7 +14,8 @@ export type SessionStatus = "connecting" | "authenticating" | "connected" | "clo
 
 export interface SessionTab {
   key: string;
-  kind: "ssh" | "sftp";
+  /** « local » : terminal de cette machine (hostId vide). */
+  kind: "ssh" | "sftp" | "local";
   hostId: string;
   label: string;
   color: string | null;
@@ -106,6 +108,37 @@ export function openSession(host: Host, kind: "ssh" | "sftp" = "ssh") {
   ui.active = key;
 }
 
+/** Terminal local disponible (RPM, macOS, Windows ; pas le Flatpak). Lu au démarrage. */
+export const caps = $state({ localTerm: false });
+
+export async function loadCaps() {
+  caps.localTerm = await api.localTermAvailable().catch(() => false);
+}
+
+/** Ouvre un terminal sur cette machine, ou explique pourquoi c'est impossible. */
+export function openLocalTerminal() {
+  if (!caps.localTerm) {
+    toast(t("err.localTerm.flatpak"), "info", 6000);
+    return;
+  }
+  const key = crypto.randomUUID();
+  const same = ui.sessions.filter((s) => s.kind === "local").length;
+  const label = t("localTerm.label");
+  ui.sessions.push({
+    key,
+    kind: "local",
+    hostId: "",
+    label: same ? `${label} (${same + 1})` : label,
+    color: null,
+    status: "connecting",
+    error: null,
+    pending: false,
+    attempt: 0,
+    disconnect: 0,
+  });
+  ui.active = key;
+}
+
 /** Hôte d'une session (absent s'il a été supprimé depuis). */
 export function sessionHost(key: string): Host | null {
   const s = ui.sessions.find((s) => s.key === key);
@@ -116,7 +149,7 @@ export function sessionHost(key: string): Host | null {
 export function openFromSession(key: string, kind: "same" | "other") {
   const s = ui.sessions.find((s) => s.key === key);
   const host = sessionHost(key);
-  if (!s || !host) return;
+  if (!s || !host || s.kind === "local") return;
   openSession(host, kind === "same" ? s.kind : s.kind === "ssh" ? "sftp" : "ssh");
 }
 

@@ -118,6 +118,7 @@ pub fn vault_lock(
     if state.lock_closes_sessions() {
         ssh.close_all();
         sftp.close_all();
+        app.state::<crate::local_term::LocalTermManager>().close_all();
     }
     state.lock();
     crate::clipboard::clear_now(&app);

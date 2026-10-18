@@ -350,6 +350,24 @@ export const api = {
   sshClose: (sessionId: string) => invoke<void>("ssh_close", { sessionId }),
   sshPromptAnswer: (promptId: number, answer: string[] | null) =>
     invoke<void>("ssh_prompt_answer", { promptId, answer }),
+  /** Terminal local possible (pas dans le Flatpak). */
+  localTermAvailable: () => invoke<boolean>("local_term_available"),
+  localTermOpen: (
+    cols: number,
+    rows: number,
+    onEvent: (e: SessionEvent) => void,
+    onData: (bytes: Uint8Array) => void,
+  ) => {
+    const events = new Channel<SessionEvent>();
+    events.onmessage = onEvent;
+    const data = new Channel<ArrayBuffer | number[]>();
+    data.onmessage = (chunk) => onData(chunk instanceof ArrayBuffer ? new Uint8Array(chunk) : Uint8Array.from(chunk));
+    return invoke<string>("local_term_open", { cols, rows, events, data });
+  },
+  localTermWrite: (id: string, data: string) => invoke<void>("local_term_write", { id, data }),
+  localTermPaste: (id: string, bracketed: boolean) => invoke<void>("local_term_paste", { id, bracketed }),
+  localTermResize: (id: string, cols: number, rows: number) => invoke<void>("local_term_resize", { id, cols, rows }),
+  localTermClose: (id: string) => invoke<void>("local_term_close", { id }),
   sftpOpen: (hostId: string, onEvent: (e: SessionEvent) => void) => {
     const events = new Channel<SessionEvent>();
     events.onmessage = onEvent;

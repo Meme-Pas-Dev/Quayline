@@ -9,7 +9,7 @@ export const IS_WINDOWS = /Windows/.test(navigator.userAgent);
 // Nom de la touche Maj traduit : accesseurs, relus à chaque affichage.
 const shift = () => t("keys.shift");
 export const KEYS = IS_MAC
-  ? { copy: "⌘C", paste: "⌘V", lock: "⌘⇧L", lockShort: "⌘⇧L" }
+  ? { copy: "⌘C", paste: "⌘V", lock: "⌘⇧L", lockShort: "⌘⇧L", localTerm: "⌘T" }
   : {
       get copy() {
         return `Ctrl+${shift()}+C`;
@@ -21,17 +21,20 @@ export const KEYS = IS_MAC
         return `Ctrl+${shift()}+L`;
       },
       lockShort: "Ctrl⇧L",
+      get localTerm() {
+        return `Ctrl+${shift()}+T`;
+      },
     };
 
-export type Shortcut = "copy" | "paste" | "lock";
+export type Shortcut = "copy" | "paste" | "lock" | "localTerm";
 
 export function shortcut(e: KeyboardEvent): Shortcut | null {
   const key = e.key.toLowerCase();
   if (IS_MAC) {
     if (!e.metaKey || e.ctrlKey || e.altKey) return null;
     if (e.shiftKey) return key === "l" ? "lock" : null;
-    return key === "c" ? "copy" : key === "v" ? "paste" : null;
+    return key === "c" ? "copy" : key === "v" ? "paste" : key === "t" ? "localTerm" : null;
   }
   if (!e.ctrlKey || !e.shiftKey) return null;
-  return key === "c" ? "copy" : key === "v" ? "paste" : key === "l" ? "lock" : null;
+  return key === "c" ? "copy" : key === "v" ? "paste" : key === "l" ? "lock" : key === "t" ? "localTerm" : null;
 }

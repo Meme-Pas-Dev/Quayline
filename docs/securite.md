@@ -159,6 +159,21 @@ phrase de passe ──Argon2id (256 Mio, 3 passes)──▶ clé ──XChaCha20
 - **Permissions** : modification des bits `0o7777` seulement (jamais à travers un lien
   symbolique pour les fichiers locaux ; pas sous Windows, qui utilise des ACL).
 
+## Terminal local
+
+- Shell de la machine dans un onglet (`local_term.rs`, crate `portable-pty` : PTY sous
+  Linux et macOS, ConPTY sous Windows) : shell de connexion de l'utilisateur (base des
+  utilisateurs) sous Linux et macOS, PowerShell 7 ou Windows PowerShell sous Windows ;
+  dossier personnel, `TERM=xterm-256color`. Il a les droits de l'utilisateur, comme
+  n'importe quel terminal ; aucun secret du coffre n'y passe.
+- Ouverture et saisie refusées coffre verrouillé ; collage lu par le backend, comme pour
+  SSH. Au verrouillage, fermé ou gardé selon « Sessions au verrouillage » ; fermé à la
+  réinitialisation et à la fermeture de Quayline (fin du processus, fermeture du PTY).
+- **Absent du Flatpak** : le shell y serait celui du bac à sable, et lancer celui de la
+  machine demanderait la permission `org.freedesktop.Flatpak`, qui permet d'exécuter
+  n'importe quelle commande hors du bac à sable et annulerait l'isolation de toute
+  l'application (décision du 18 octobre 2026).
+
 ## Réinitialisation
 
 - Réglages → Données → « Réinitialiser Quayline » (`reset.rs`) : coffre ouvert,

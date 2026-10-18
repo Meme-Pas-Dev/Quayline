@@ -7,7 +7,8 @@
   import Icon from "../components/Icon.svelte";
   import PageHeader from "../components/PageHeader.svelte";
   import { toast } from "../components/toast.svelte";
-  import { data, handleError, identityName, openSession, reload } from "../store.svelte";
+  import { caps, data, handleError, identityName, openLocalTerminal, openSession, reload } from "../store.svelte";
+  import { KEYS } from "../platform";
   import { display } from "../display.svelte";
 
   // Affichage des tuiles (Réglages → Général).
@@ -141,6 +142,11 @@
       <Icon name="search" size={16} />
       <input class="input" placeholder={t("hosts.search")} bind:value={query} spellcheck="false" />
     </div>
+    {#if caps.localTerm}
+      <button class="btn" onclick={openLocalTerminal} title={t("localTerm.openTitle", { keys: KEYS.localTerm })}>
+        <Icon name="laptop" size={16} /> {t("localTerm.label")}
+      </button>
+    {/if}
     <button class="btn primary" onclick={() => (editing = null)}><Icon name="plus" size={16} /> {t("hosts.new")}</button>
   {/snippet}
 </PageHeader>

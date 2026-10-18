@@ -11,7 +11,7 @@ Version:        @VERSION@
 Release:        @BUILD@%{?dist}
 Summary:        Secure SSH/SFTP client with an encrypted vault
 License:        GPL-3.0-or-later
-URL:            https://github.com/Meme-Pas-Dev/Quayline
+URL:            https://memepas.dev/en/quayline/
 Source0:        %{name}-%{version}.tar.gz
 ExclusiveArch:  x86_64
 

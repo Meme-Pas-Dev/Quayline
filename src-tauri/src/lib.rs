@@ -6,6 +6,7 @@ mod fido2;
 mod http;
 mod i18n;
 mod identity;
+mod local_term;
 mod oidc;
 mod platform;
 mod reset;
@@ -67,6 +68,7 @@ fn lock_now(handle: &AppHandle, reason: &str) {
     if close_sessions {
         handle.state::<ssh::SshManager>().close_all();
         handle.state::<sftp::SftpManager>().close_all();
+        handle.state::<local_term::LocalTermManager>().close_all();
     }
     let _ = handle.emit("vault://locked", reason);
 }
@@ -107,6 +109,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(ssh::SshManager::default())
         .manage(sftp::SftpManager::default())
+        .manage(local_term::LocalTermManager::default())
         .manage(sftp_edit::EditManager::default())
         .manage(oidc::OidcState::default())
         .manage(clipboard::SecretClipboard::default())
@@ -174,6 +177,12 @@ pub fn run() {
             commands::vault_unlock,
             commands::vault_lock,
             reset::app_reset,
+            local_term::local_term_available,
+            local_term::local_term_open,
+            local_term::local_term_write,
+            local_term::local_term_paste,
+            local_term::local_term_resize,
+            local_term::local_term_close,
             commands::vault_touch,
             commands::vault_change_password,
             backup::vault_export,
@@ -249,6 +258,7 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 clipboard::clear_now(app);
                 app.state::<sftp_edit::EditManager>().stop_all();
+                app.state::<local_term::LocalTermManager>().close_all();
             }
         });
 }

@@ -43,6 +43,25 @@
   }
 
   const host = $derived(data.hosts.find((h) => h.id === tab.hostId));
+  // Mêmes opérations pour une session SSH et pour un terminal local.
+  const local = untrack(() => tab.kind === "local");
+  const backend = local
+    ? {
+        open: (cols: number, rows: number, onEvent: (e: SessionEvent) => void, onData: (b: Uint8Array) => void) =>
+          api.localTermOpen(cols, rows, onEvent, onData),
+        write: api.localTermWrite,
+        paste: api.localTermPaste,
+        resize: api.localTermResize,
+        close: api.localTermClose,
+      }
+    : {
+        open: (cols: number, rows: number, onEvent: (e: SessionEvent) => void, onData: (b: Uint8Array) => void) =>
+          api.sshOpen(untrack(() => tab.hostId), cols, rows, onEvent, onData),
+        write: api.sshWrite,
+        paste: api.sshPaste,
+        resize: api.sshResize,
+        close: api.sshClose,
+      };
 
   function themeFor(id: string | undefined) {
     return (TERMINAL_THEMES[id ?? ""] ?? TERMINAL_THEMES.night).theme;
@@ -85,7 +104,7 @@
   $effect(() => {
     if (tab.disconnect === disconnectSeen) return;
     disconnectSeen = tab.disconnect;
-    if (sessionId) api.sshClose(sessionId).catch(() => {});
+    if (sessionId) backend.close(sessionId).catch(() => {});
   });
 
   async function copySelection() {
@@ -96,7 +115,7 @@
   // Le presse-papiers est lu par le backend : l'interface n'y a pas accès.
   async function paste() {
     if (!sessionId || tab.status !== "connected" || !term) return;
-    await api.sshPaste(sessionId, term.modes.bracketedPasteMode).catch(handleError);
+    await backend.paste(sessionId, term.modes.bracketedPasteMode).catch(handleError);
     term.scrollToBottom();
   }
 
@@ -140,14 +159,14 @@
         else paste();
         return false;
       }
-      return action !== "lock"; // Verrouillage : géré par la fenêtre.
+      return action !== "lock" && action !== "localTerm"; // Gérés par la fenêtre.
     });
 
     terminal.onData((input) => {
-      if (sessionId && tab.status === "connected") api.sshWrite(sessionId, input).catch(() => {});
+      if (sessionId && tab.status === "connected") backend.write(sessionId, input).catch(() => {});
     });
     terminal.onResize(({ cols, rows }) => {
-      if (sessionId) api.sshResize(sessionId, cols, rows).catch(() => {});
+      if (sessionId) backend.resize(sessionId, cols, rows).catch(() => {});
     });
 
     const observer = new ResizeObserver(() => refit());
@@ -167,10 +186,8 @@
       observer.observe(container);
       refit();
       try {
-        const id = await api.sshOpen(tab.hostId, terminal.cols, terminal.rows, onEvent, (bytes) =>
-          terminal.write(bytes),
-        );
-        if (disposed) api.sshClose(id);
+        const id = await backend.open(terminal.cols, terminal.rows, onEvent, (bytes) => terminal.write(bytes));
+        if (disposed) backend.close(id);
         else sessionId = id;
       } catch (e) {
         onEvent({ type: "closed", error: errorMessage(e) });
@@ -180,7 +197,7 @@
     return () => {
       disposed = true;
       observer.disconnect();
-      if (sessionId) api.sshClose(sessionId).catch(() => {});
+      if (sessionId) backend.close(sessionId).catch(() => {});
       prompts.cancelPending();
       terminal.dispose();
       term = null;
@@ -247,7 +264,7 @@
           <span class="spinner"></span>
           <div>
             <strong>{t(tab.status === "connecting" ? "session.status.connecting" : "session.status.authenticating")}</strong>
-            <span class="mono">{host ? `${host.hostname}:${host.port}` : ""}</span>
+            <span class="mono">{local ? t("localTerm.label") : host ? `${host.hostname}:${host.port}` : ""}</span>
           </div>
         </div>
       </div>
@@ -257,7 +274,7 @@
       <Icon name={tab.error ? "alert" : "check"} size={16} />
       <span>{tab.error ?? t("terminal.endedDot")}</span>
       <div class="spacer"></div>
-      <button class="btn" onclick={() => reconnect(tab.key)}>{t("menu.reconnect")}</button>
+      <button class="btn" onclick={() => reconnect(tab.key)}>{t(local ? "menu.restart" : "menu.reconnect")}</button>
       <button class="btn ghost" onclick={() => closeSession(tab.key)}>{t("terminal.closeTab")}</button>
     </div>
   {/if}

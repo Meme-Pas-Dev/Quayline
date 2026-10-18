@@ -856,5 +856,11 @@
   "reset.word": "REINITIALISER",
   "reset.typeWord": "Tapez {word} pour confirmer",
   "reset.confirm": "Tout effacer",
-  "reset.leftovers": "Quayline a été réinitialisé, mais ces fichiers n'ont pas pu être supprimés : {paths}"
+  "reset.leftovers": "Quayline a été réinitialisé, mais ces fichiers n'ont pas pu être supprimés : {paths}",
+  "err.localTerm.flatpak": "Le terminal local n'est pas disponible dans la version Flatpak, isolée du système. Il l'est dans le RPM (dépôt COPR), sous macOS et sous Windows.",
+  "err.localTerm.start": "Impossible de lancer le terminal local : {detail}",
+  "localTerm.label": "Terminal local",
+  "localTerm.openTitle": "Ouvrir un terminal sur cet ordinateur ({keys})",
+  "menu.restart": "Relancer",
+  "menu.newLocalTerminal": "Nouveau terminal local"
 }

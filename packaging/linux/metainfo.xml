@@ -35,7 +35,7 @@
     </p>
   </description>
   <launchable type="desktop-id">@DESKTOP_ID@</launchable>
-  <url type="homepage">https://github.com/Meme-Pas-Dev/Quayline</url>
+  <url type="homepage">https://memepas.dev/en/quayline/</url>
   <url type="bugtracker">https://github.com/Meme-Pas-Dev/Quayline/issues</url>
   <url type="vcs-browser">https://github.com/Meme-Pas-Dev/Quayline</url>
   <categories>
