@@ -862,5 +862,9 @@
   "localTerm.label": "Local terminal",
   "localTerm.openTitle": "Open a terminal on this computer ({keys})",
   "menu.restart": "Restart",
-  "menu.newLocalTerminal": "New local terminal"
+  "menu.newLocalTerminal": "New local terminal",
+  "err.localTerm.disabled": "The local terminal is turned off. Turn it on in Settings → Terminal.",
+  "settings.localTerm.enable": "Local terminal",
+  "settings.localTerm.hint": "A shell of this computer in a tab: “Local terminal” button on the Hosts page and keyboard shortcut.",
+  "settings.localTerm.hintWindows": "Off by default on Windows: until the application is signed, some corporate security software (EDR) blocks Quayline when it opens a console. Turn it on if your computer has no such software, or if your IT team allows it."
 }

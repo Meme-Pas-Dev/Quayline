@@ -11,13 +11,13 @@
   import SecurityKeySettings from "../components/SecurityKeySettings.svelte";
   import BackupSettings from "../components/BackupSettings.svelte";
   import ResetSettings from "../components/ResetSettings.svelte";
-  import { data, handleError } from "../store.svelte";
+  import { caps, data, handleError } from "../store.svelte";
   import { TERMINAL_THEMES } from "../terminalThemes";
   import { setThemePreference, themePreference, type ThemePreference } from "../appearance";
   import { providerName } from "../oidcProviders";
-  import { IS_MAC } from "../platform";
+  import { IS_MAC, IS_WINDOWS } from "../platform";
   import { checkForUpdate, update } from "../updates.svelte";
-  import { display, setTileDensity, type TileDensity } from "../display.svelte";
+  import { display, setLocalTermEnabled, setTileDensity, type TileDensity } from "../display.svelte";
   import { APP_NAME } from "../identity";
   import UpdateActions from "../components/UpdateActions.svelte";
   import { formatList, intlLocale, languagePreference, setLanguagePreference, t, tn, type LanguagePreference, type MessageKey } from "../i18n/index.svelte";
@@ -351,6 +351,21 @@
           <p>{t("settings.terminal.fontSizeHint")}</p>
         </div>
         <input class="input" type="number" min="8" max="32" bind:value={settings.terminal_font_size} onchange={save} />
+      </div>
+    </section>
+    {/if}
+    {#if caps.localTerm}
+    <section class="card">
+      <h2><Icon name="laptop" size={17} /> {t("localTerm.label")}</h2>
+      <div class="setting">
+        <div>
+          <strong>{t("settings.localTerm.enable")}</strong>
+          <p>{t(IS_WINDOWS ? "settings.localTerm.hintWindows" : "settings.localTerm.hint")}</p>
+        </div>
+        <select class="input" value={display.localTerm ? "on" : "off"} onchange={(e) => setLocalTermEnabled(e.currentTarget.value === "on")}>
+          <option value="on">{t("common.enabled")}</option>
+          <option value="off">{t("common.disabled")}</option>
+        </select>
       </div>
     </section>
     {/if}

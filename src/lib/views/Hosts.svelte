@@ -142,7 +142,7 @@
       <Icon name="search" size={16} />
       <input class="input" placeholder={t("hosts.search")} bind:value={query} spellcheck="false" />
     </div>
-    {#if caps.localTerm}
+    {#if caps.localTerm && display.localTerm}
       <button class="btn" onclick={openLocalTerminal} title={t("localTerm.openTitle", { keys: KEYS.localTerm })}>
         <Icon name="laptop" size={16} /> {t("localTerm.label")}
       </button>

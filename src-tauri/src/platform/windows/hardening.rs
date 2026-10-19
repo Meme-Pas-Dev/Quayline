@@ -2,12 +2,17 @@
 
 use windows_sys::Win32::System::Diagnostics::Debug::{SetErrorMode, SEM_FAILCRITICALERRORS, SEM_NOGPFAULTERRORBOX};
 use windows_sys::Win32::System::ErrorReporting::WerAddExcludedApplication;
+use windows_sys::Win32::System::LibraryLoader::{SetDefaultDllDirectories, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS};
 
 use super::wide;
 
 /// - pas de rapport d'erreurs Windows (WER) pour l'application : un plantage ne produit
 ///   pas de vidage mémoire, qui contiendrait la clé du coffre ;
-/// - pas de fenêtre « a cessé de fonctionner », qui retiendrait le processus en mémoire.
+/// - pas de fenêtre « a cessé de fonctionner », qui retiendrait le processus en mémoire ;
+/// - DLL chargées en cours d'exécution cherchées seulement dans le dossier de
+///   l'application et dans `System32`, jamais dans le dossier courant ni dans le `PATH`
+///   (`portable-pty` charge `conpty.dll` par un nom relatif) : un fichier déposé là
+///   ne peut pas être chargé dans Quayline.
 ///
 /// Un autre processus du même utilisateur peut toujours lire la mémoire (le propriétaire
 /// peut modifier les droits du processus) : comme sous Linux, la protection vise les
@@ -15,6 +20,9 @@ use super::wide;
 pub fn harden_process() {
     unsafe {
         SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+        if SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS) == 0 {
+            eprintln!("{}: cannot restrict the DLL search path", crate::identity::SLUG);
+        }
     }
     let Some(exe) = std::env::current_exe().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
     else {

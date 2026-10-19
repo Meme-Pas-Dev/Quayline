@@ -20,7 +20,8 @@ downloads for your system).
   a built-in editor or in the system's default application, changes being sent back to
   the server.
 - **Local terminal** in a tab, next to SSH sessions (RPM, macOS and Windows; not in the
-  Flatpak, which stays isolated from the system).
+  Flatpak, which stays isolated from the system). Off by default on Windows: turn it on
+  in Settings → Terminal.
 - **Encrypted vault** for servers, passwords and SSH keys, with encrypted export and
   import for backups or moving to another computer.
 - **Unlocking** with the master password, a **FIDO2 security key** (YubiKey,
@@ -225,7 +226,8 @@ téléchargement pour votre système).
   fichiers distants se modifient dans un éditeur intégré ou dans l'application par
   défaut du système, les changements étant renvoyés au serveur.
 - **Terminal local** dans un onglet, à côté des sessions SSH (RPM, macOS et Windows ;
-  pas dans le Flatpak, qui reste isolé du système).
+  pas dans le Flatpak, qui reste isolé du système). Désactivé par défaut sous Windows :
+  à activer dans Réglages → Terminal.
 - **Coffre chiffré** pour les serveurs, mots de passe et clés SSH, avec export et import
   chiffrés pour la sauvegarde ou le passage à un autre ordinateur.
 - **Déverrouillage** par mot de passe maître, par **clé de sécurité FIDO2** (YubiKey,

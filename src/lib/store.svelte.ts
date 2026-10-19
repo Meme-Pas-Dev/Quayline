@@ -1,6 +1,7 @@
 import { api, errorCode, errorMessage, type Host, type Identity, type Settings, type TransferEvent } from "./api";
 import { toast } from "./components/toast.svelte";
 import { t } from "./i18n/index.svelte";
+import { display } from "./display.svelte";
 
 export const data = $state<{ hosts: Host[]; identities: Identity[]; settings: Settings | null; loaded: boolean }>({
   hosts: [],
@@ -119,6 +120,10 @@ export async function loadCaps() {
 export function openLocalTerminal() {
   if (!caps.localTerm) {
     toast(t("err.localTerm.flatpak"), "info", 6000);
+    return;
+  }
+  if (!display.localTerm) {
+    toast(t("err.localTerm.disabled"), "info", 6000);
     return;
   }
   const key = crypto.randomUUID();

@@ -8,6 +8,33 @@ de texte à sa release GitHub.
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-10-19
+
+### English
+
+**Changed**
+- Windows: the local terminal is now off by default, and can be turned on in
+  Settings → Terminal. Some corporate security software (EDR) blocked Quayline when it
+  opened a console, because the Windows build is not signed yet. Linux and macOS are
+  unchanged.
+
+**Security**
+- Windows: libraries loaded while the application runs are only looked for in its own
+  folder and in the system folder, never in the current folder or in the `PATH`.
+
+### Français
+
+**Modifié**
+- Windows : le terminal local est désormais désactivé par défaut ; il s'active dans
+  Réglages → Terminal. Certains logiciels de sécurité d'entreprise (EDR) bloquaient
+  Quayline à l'ouverture d'une console, car la version Windows n'est pas encore
+  signée. Rien ne change sous Linux et macOS.
+
+**Sécurité**
+- Windows : les bibliothèques chargées pendant l'exécution ne sont cherchées que dans
+  le dossier de l'application et dans le dossier système, jamais dans le dossier
+  courant ni dans le `PATH`.
+
 ## [1.11.0] - 2026-10-18
 
 ### English

@@ -173,6 +173,15 @@ phrase de passe ──Argon2id (256 Mio, 3 passes)──▶ clé ──XChaCha20
   machine demanderait la permission `org.freedesktop.Flatpak`, qui permet d'exécuter
   n'importe quelle commande hors du bac à sable et annulerait l'isolation de toute
   l'application (décision du 18 octobre 2026).
+- **Désactivé par défaut sous Windows** (1.11.1, réglage Terminal → Terminal local,
+  propre à l'ordinateur) : SentinelOne a bloqué la 1.11.0 sur un poste d'entreprise
+  (« pseudo console created by an unsigned process », lancement de PowerShell, lecture
+  de sa sortie). Le code fait ce que fait tout terminal (ConPTY, `CreateProcessW`) ;
+  la vraie solution est la signature Authenticode de l'exécutable Windows.
+- **Recherche des DLL restreinte sous Windows** (`SetDefaultDllDirectories`, au
+  démarrage) : dossier de l'application et `System32` seulement. `portable-pty` charge
+  `conpty.dll` par un nom relatif, que Windows chercherait sinon aussi dans le dossier
+  courant et dans le `PATH`.
 
 ## Réinitialisation
 
