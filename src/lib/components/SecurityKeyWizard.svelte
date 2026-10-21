@@ -331,7 +331,7 @@
   .done .dot {
     background: var(--success);
     border-color: var(--success);
-    color: #0d0f14;
+    color: var(--on-success);
   }
   .panel {
     display: flex;

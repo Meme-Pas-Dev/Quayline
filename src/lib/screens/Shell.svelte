@@ -52,6 +52,7 @@
   let menu = $state<{ key: string; x: number; y: number } | null>(null);
   const menuSession = $derived(menu ? ui.sessions.find((s) => s.key === menu!.key) ?? null : null);
   const menuHost = $derived(menu ? sessionHost(menu.key) : null);
+  const activeSession = $derived(ui.active ? ui.sessions.find((s) => s.key === ui.active) ?? null : null);
   let menuEl = $state<HTMLDivElement>();
 
   function openMenu(e: MouseEvent, key: string) {
@@ -174,7 +175,9 @@
     </button>
   </aside>
 
-  <section class="content">
+  <main class="content">
+    <!-- Titre de la session affichée, pour les lecteurs d'écran (les pages ont le leur). -->
+    {#if activeSession}<h1 class="sr-only">{activeSession.label}</h1>{/if}
     <div class="page" class:hidden={!!ui.active}>
       {#if ui.view === "hosts"}
         <Hosts />
@@ -194,7 +197,7 @@
         {/if}
       {/key}
     {/each}
-  </section>
+  </main>
 </div>
 
 {#if askUpdates}

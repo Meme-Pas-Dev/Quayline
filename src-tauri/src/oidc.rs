@@ -350,14 +350,13 @@ async fn authenticate(app: &AppHandle, cfg: &ClientConfig) -> CmdResult<(Identit
         .append_pair("nonce", &nonce)
         .append_pair("code_challenge", &challenge)
         .append_pair("code_challenge_method", "S256");
-    // Hors délai de grâce, nouvelle authentification exigée : une session déjà ouverte
+    // Hors délai de grâce, nouvelle authentification exigée : une session ancienne
     // dans le navigateur ne suffit pas. Âge maximal de l'authentification (OpenID
-    // Connect Core §3.1.2.1), vérifié ensuite avec `auth_time` (fresh_login). Google
-    // refuse les valeurs de `prompt` autres que none, consent et select_account (seul
-    // `max_age` s'applique alors).
+    // Connect Core §3.1.2.1), vérifié ensuite avec `auth_time` (fresh_login), et
+    // `prompt=login` selon le fournisseur (voir `sends_prompt_login`).
     if force_login {
         auth_url.query_pairs_mut().append_pair("max_age", &MAX_AUTH_AGE.to_string());
-        if cfg.provider.as_deref() != Some("google") {
+        if sends_prompt_login(cfg.provider.as_deref()) {
             auth_url.query_pairs_mut().append_pair("prompt", "login");
         }
     }
@@ -383,7 +382,12 @@ async fn authenticate(app: &AppHandle, cfg: &ClientConfig) -> CmdResult<(Identit
         .await
         .and_then(|(identity, auth_time)| {
             let reauth_unverified = if force_login {
-                fresh_login(auth_time, now_secs(), MAX_AUTH_AGE, &name)?
+                let unverified = fresh_login(auth_time, now_secs(), MAX_AUTH_AGE, &name)?;
+                // Sans `prompt=login`, seul `auth_time` prouve une connexion récente.
+                if unverified && requires_auth_time(cfg.provider.as_deref()) {
+                    return Err(oidc_err(tr!("err.oidc.noAuthTime", provider = name)));
+                }
+                unverified
             } else {
                 auth_time.is_none()
             };
@@ -453,6 +457,23 @@ const MAX_AUTH_AGE: u64 = 300;
 
 fn now_secs() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// `prompt=login` hors délai de grâce : nouvelle authentification même si une session
+/// vient d'être ouverte. Pas pour Google, qui refuse les valeurs de `prompt` autres que
+/// none, consent et select_account. Pas pour Pocket ID (liaison sans modèle comprise) :
+/// après une connexion faite à l'instant (session absente du navigateur), il redemandait
+/// la clé d'accès, et Firefox sous Linux ne proposait plus alors la connexion par QR
+/// code. `max_age` suffit : Pocket ID le respecte et renvoie `auth_time`, exigé
+/// (`requires_auth_time`).
+fn sends_prompt_login(provider: Option<&str>) -> bool {
+    !matches!(provider, None | Some("pocket-id") | Some("google"))
+}
+
+/// Fournisseurs dont la connexion récente n'est prouvée que par `auth_time` : sans
+/// cette valeur, la connexion est refusée hors délai de grâce.
+fn requires_auth_time(provider: Option<&str>) -> bool {
+    matches!(provider, None | Some("pocket-id"))
 }
 
 /// Vérifie que l'utilisateur s'est authentifié il y a moins de `max_age` secondes. `Ok(true)` si le fournisseur ne
@@ -664,8 +685,8 @@ fn page(success: bool, title: &str, message: &str) -> String {
     let html = format!(
         "<!doctype html><html lang=\"{lang}\"><meta charset=\"utf-8\">\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{name}</title>\
-         <style>:root{{color-scheme:light dark;--bg:#0d0f14;--card:#171a23;--border:#262b3a;--text:#e6e8ef;\
-         --muted:#9097ab}}@media (prefers-color-scheme:light){{:root{{--bg:#f4f5f9;--card:#fff;--border:#e1e4ec;\
+         <style>:root{{color-scheme:light dark;--bg:#0c1326;--card:#142043;--border:#223159;--text:#e9edf9;\
+         --muted:#c4cce4}}@media (prefers-color-scheme:light){{:root{{--bg:#f4f5f9;--card:#fff;--border:#e1e4ec;\
          --text:#1a1d27;--muted:#5b6275}}}}body{{font-family:system-ui,-apple-system,\"Segoe UI\",sans-serif;\
          background:var(--bg);color:var(--text);display:grid;place-items:center;min-height:100vh;margin:0;\
          padding:24px;box-sizing:border-box}}main{{max-width:420px;padding:36px 32px;text-align:center;\
@@ -1177,6 +1198,18 @@ mod tests {
         // Délai de grâce de 15 minutes : une connexion d'il y a 10 minutes suffit.
         assert!(!fresh_login(Some(now - 600), now, 900, "X").unwrap());
         assert!(fresh_login(Some(now - 1000), now, 900, "X").is_err());
+    }
+
+    #[test]
+    fn prompt_login_by_provider() {
+        assert!(!sends_prompt_login(None), "liaison sans modèle : Pocket ID");
+        assert!(!sends_prompt_login(Some("pocket-id")));
+        assert!(!sends_prompt_login(Some("google")));
+        for p in ["authentik", "authelia", "keycloak", "entra", "generic"] {
+            assert!(sends_prompt_login(Some(p)), "{p}");
+        }
+        assert!(requires_auth_time(None) && requires_auth_time(Some("pocket-id")));
+        assert!(!requires_auth_time(Some("google")) && !requires_auth_time(Some("keycloak")));
     }
 
     #[test]

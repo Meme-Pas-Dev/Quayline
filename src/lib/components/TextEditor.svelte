@@ -75,6 +75,8 @@
               // doit le reprendre pour que ses styles ne soient pas bloqués.
               ...(styleNonce() ? [View.cspNonce.of(styleNonce()!)] : []),
               syntaxHighlighting(highlight),
+              // Nom accessible de la zone de saisie (lecteurs d'écran), atteignable au clavier.
+              View.contentAttributes.of({ "aria-label": t("editor.contentLabel", { name: path.split("/").pop() ?? path }), tabindex: "0" }),
               ...(lang ? [lang] : []),
               EditorState.lineSeparator.of(crlf ? "\r\n" : "\n"),
               keymap.of([{ key: "Mod-s", preventDefault: true, run: () => (save(false), true) }]),

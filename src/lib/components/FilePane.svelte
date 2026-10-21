@@ -349,20 +349,23 @@
     {/if}
   </div>
 
-  <div class="table" class:perms={showPerms}>
-    <div class="thead">
-      <span>{t("files.name")}</span>
-      {#if showPerms}<span>{t("files.permissions")}</span>{/if}
-      <span class="num">{t("files.size")}</span>
-      <span>{t("files.modified")}</span>
+  <!-- Grille ARIA : en-têtes de colonnes, lignes sélectionnables (lecteurs d'écran). -->
+  <div class="table" class:perms={showPerms} role="grid" aria-multiselectable="true" aria-label={title}>
+    <div class="thead" role="row">
+      <span role="columnheader">{t("files.name")}</span>
+      {#if showPerms}<span role="columnheader">{t("files.permissions")}</span>{/if}
+      <span class="num" role="columnheader">{t("files.size")}</span>
+      <span role="columnheader">{t("files.modified")}</span>
     </div>
-    <div class="tbody">
+    <div class="tbody" role="rowgroup">
       {#if error}
-        <div class="state error"><Icon name="alert" size={18} /> {error}</div>
+        <div class="state error" role="row"><span class="state-cell" role="gridcell"><Icon name="alert" size={18} /> {error}</span></div>
       {:else if loading && entries.length === 0}
-        <div class="state">{t("files.loading")}</div>
+        <div class="state" role="row"><span class="state-cell" role="gridcell">{t("files.loading")}</span></div>
       {:else if visible.length === 0}
-        <div class="state">{t("files.empty")}{hiddenCount && !showHidden ? tn("files.hiddenCount", hiddenCount) : ""}</div>
+        <div class="state" role="row">
+          <span class="state-cell" role="gridcell">{t("files.empty")}{hiddenCount && !showHidden ? tn("files.hiddenCount", hiddenCount) : ""}</span>
+        </div>
       {/if}
       {#each visible as entry (entry.path)}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -371,23 +374,24 @@
           class:selected={selected.has(entry.path)}
           class:hidden-file={entry.name.startsWith(".")}
           role="row"
+          aria-selected={selected.has(entry.path)}
           tabindex="-1"
           onclick={(e) => select(entry, e)}
           ondblclick={() => open(entry)}
           oncontextmenu={(e) => onrowcontext(entry, e)}
           onpointerdown={(e) => onrowpointerdown(entry, e)}
         >
-          <span class="name">
+          <span class="name" role="gridcell">
             <span class="ficon" class:dir={entry.isDir}><Icon name={iconFor(entry)} size={16} /></span>
             <span class="label">{displayName(entry.name)}</span>
           </span>
           {#if showPerms}
-            <span class="perm mono" title={entry.owner || entry.group ? `${entry.owner ?? "?"} : ${entry.group ?? "?"}` : undefined}
+            <span class="perm mono" role="gridcell" title={entry.owner || entry.group ? `${entry.owner ?? "?"} : ${entry.group ?? "?"}` : undefined}
               >{entry.permissions ?? ""}</span
             >
           {/if}
-          <span class="num">{entry.isDir ? "" : formatSize(entry.size)}</span>
-          <span class="date">{formatDate(entry.modified)}</span>
+          <span class="num" role="gridcell">{entry.isDir ? "" : formatSize(entry.size)}</span>
+          <span class="date" role="gridcell">{formatDate(entry.modified)}</span>
         </div>
       {/each}
     </div>
@@ -681,13 +685,15 @@
     white-space: nowrap;
   }
   .state {
+    padding: 40px 16px;
+    color: var(--text-faint);
+    text-align: center;
+  }
+  .state-cell {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 40px 16px;
-    color: var(--text-faint);
-    text-align: center;
   }
   .state.error {
     color: var(--danger);

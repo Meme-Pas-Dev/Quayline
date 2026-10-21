@@ -20,7 +20,15 @@
   const colors = ["var(--danger)", "var(--warning)", "var(--accent-2)", "var(--success)"];
 </script>
 
-<div class="meter" aria-label={t("strength.label", { level: labels[level] })}>
+<div
+  class="meter"
+  role="meter"
+  aria-valuemin={0}
+  aria-valuemax={3}
+  aria-valuenow={password ? level : 0}
+  aria-valuetext={labels[level]}
+  aria-label={t("strength.label", { level: labels[level] })}
+>
   <div class="bars">
     {#each [0, 1, 2, 3] as i}
       <span style:background={password && i <= level ? colors[level] : undefined}></span>

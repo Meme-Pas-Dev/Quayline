@@ -259,11 +259,15 @@ fournisseur » : quelqu'un qui contrôle déjà votre session (et donc votre tro
 pourrait lire la clé sans passer par le fournisseur. Le mot de passe maître reste la
 racine, et le moyen de secours. Pour un facteur matériel qui ne dépend pas du trousseau, voir ci-dessous.
 
-**Authentification récente.** Hors délai de grâce, une session déjà ouverte chez le
-fournisseur ne suffit pas : la connexion par navigateur demande une nouvelle
-authentification (`prompt=login`, sauf Google qui ne l'accepte pas) datant de moins de
-5 minutes (`max_age=300`), et Quayline vérifie l'heure `auth_time` du jeton (marge d'une
-minute). **Délai de grâce** (réglage « Nouvelle connexion au fournisseur d'identité »,
+**Authentification récente.** Hors délai de grâce, une session ancienne chez le
+fournisseur ne suffit pas : la connexion par navigateur exige une authentification
+datant de moins de 5 minutes (`max_age=300`), et Quayline vérifie l'heure `auth_time` du
+jeton (marge d'une minute). `prompt=login` (nouvelle authentification même si la session
+vient d'être ouverte) est ajouté pour les fournisseurs génériques, Authentik, Authelia,
+Keycloak et Entra ; pas pour Google, qui ne l'accepte pas, ni pour Pocket ID (1.12.0) :
+après une connexion faite à l'instant, il redemandait la clé d'accès, et Firefox sous
+Linux ne proposait plus la connexion par QR code. Pocket ID respecte `max_age` ; sans
+`auth_time` dans son jeton, la connexion est refusée. **Délai de grâce** (réglage « Nouvelle connexion au fournisseur d'identité »,
 15 minutes par défaut, 0 à 60) : dans ce délai après la dernière connexion par le
 navigateur, la session du fournisseur suffit (un clic), sans `prompt` ni `max_age` :
 c'est Quayline qui compte le délai (un `max_age` égal au délai faisait redemander la clé

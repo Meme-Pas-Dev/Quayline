@@ -8,6 +8,68 @@ de texte à sa release GitHub.
 
 ## [Unreleased]
 
+### English
+
+**Added**
+- Debian and Ubuntu package (`.deb`, preview): Debian 12 or later, Ubuntu 22.04 or later
+  and their derivatives, attached to each release with a signed checksum.
+
+### Français
+
+**Ajouté**
+- Paquet Debian et Ubuntu (`.deb`, préversion) : Debian 12 ou plus récent, Ubuntu 22.04
+  ou plus récent et leurs dérivées, joint à chaque release avec une empreinte signée.
+
+## [1.12.0] - 2026-10-21
+
+### English
+
+**Changed**
+- New dark theme, in the colours of the project website (night blue and mint):
+  secondary text is much easier to read, and the terminal follows the same palette.
+  Contrast also improved in the light theme.
+
+**Accessibility**
+- Every text now meets the WCAG AA contrast ratio, in both themes. Better support for
+  screen readers: main area and titles, SFTP file list as a grid (columns, selection),
+  names for the settings lists and the editor, password strength gauge. Lighthouse
+  accessibility score: 100 on every screen (81 to 95 before).
+
+**Security**
+- rustls-webpki 0.103.16 and webpki-root-certs 1.0.10 (RUSTSEC-2026-0382,
+  RUSTSEC-2026-0383): distrusted intermediate certificates are no longer accepted.
+
+**Fixed**
+- Pocket ID: signing in from a browser with no Pocket ID session (for example with a
+  phone, through a QR code) asked for the passkey a second time, which Firefox on Linux
+  could only offer as a USB key: Quayline kept waiting. A sign-in less than 5 minutes
+  old is still required, and checked.
+
+### Français
+
+**Modifié**
+- Nouveau thème sombre, aux couleurs du site du projet (bleu nuit et menthe) : textes
+  secondaires bien plus lisibles, terminal assorti. Contraste amélioré aussi dans le
+  thème clair.
+
+**Accessibilité**
+- Tous les textes respectent le contraste WCAG AA, dans les deux thèmes. Meilleure
+  prise en charge des lecteurs d'écran : zone principale et titres, liste des fichiers
+  SFTP en grille (colonnes, sélection), noms des listes des réglages et de l'éditeur,
+  jauge de solidité du mot de passe. Score d'accessibilité Lighthouse : 100 sur chaque
+  écran (81 à 95 auparavant).
+
+**Sécurité**
+- rustls-webpki 0.103.16 et webpki-root-certs 1.0.10 (RUSTSEC-2026-0382,
+  RUSTSEC-2026-0383) : les certificats intermédiaires retirés de la confiance ne sont
+  plus acceptés.
+
+**Corrigé**
+- Pocket ID : une connexion depuis un navigateur sans session Pocket ID (par exemple
+  avec un téléphone, par QR code) redemandait la clé d'accès, que Firefox sous Linux ne
+  proposait plus que sur clé USB : Quayline restait en attente. Une connexion de moins
+  de 5 minutes reste exigée, et vérifiée.
+
 ## [1.11.1] - 2026-10-19
 
 ### English

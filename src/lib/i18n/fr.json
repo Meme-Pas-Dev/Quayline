@@ -866,5 +866,7 @@
   "err.localTerm.disabled": "Le terminal local est désactivé. Activez-le dans Réglages → Terminal.",
   "settings.localTerm.enable": "Terminal local",
   "settings.localTerm.hint": "Un shell de cet ordinateur dans un onglet : bouton « Terminal local » de la page Hôtes et raccourci clavier.",
-  "settings.localTerm.hintWindows": "Désactivé par défaut sous Windows : tant que l'application n'est pas signée, certains logiciels de sécurité d'entreprise (EDR) bloquent Quayline quand il ouvre une console. Activez-le si votre ordinateur n'en a pas, ou si votre service informatique l'autorise."
+  "settings.localTerm.hintWindows": "Désactivé par défaut sous Windows : tant que l'application n'est pas signée, certains logiciels de sécurité d'entreprise (EDR) bloquent Quayline quand il ouvre une console. Activez-le si votre ordinateur n'en a pas, ou si votre service informatique l'autorise.",
+  "err.oidc.noAuthTime": "{provider} n'a pas indiqué l'heure de votre connexion : Quayline ne peut pas vérifier qu'elle est récente. Mettez {provider} à jour, puis réessayez.",
+  "editor.contentLabel": "Contenu de {name}"
 }

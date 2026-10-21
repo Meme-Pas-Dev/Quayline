@@ -4,7 +4,7 @@
    les styles que l'éditeur de texte (CodeMirror) injecte. */
 html,
 body {
-  background: #0d0f14;
+  background: #0c1326;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {

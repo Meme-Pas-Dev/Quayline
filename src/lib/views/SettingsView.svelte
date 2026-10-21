@@ -174,7 +174,7 @@
       </div>
       <!-- Noms des langues dans leur propre langue, pour s'y retrouver quelle que soit
            la langue affichée. -->
-      <select class="input" bind:value={languageChoice} onchange={() => setLanguagePreference(languageChoice)}>
+      <select aria-label={t("settings.appearance.language")} class="input" bind:value={languageChoice} onchange={() => setLanguagePreference(languageChoice)}>
         <option value="system">{t("settings.appearance.system")}</option>
         <option value="en">English</option>
         <option value="fr">Français</option>
@@ -185,7 +185,7 @@
         <strong>{t("settings.appearance.theme")}</strong>
         <p>{t("settings.appearance.themeHint")}</p>
       </div>
-      <select class="input" bind:value={appearance} onchange={() => setThemePreference(appearance)}>
+      <select aria-label={t("settings.appearance.theme")} class="input" bind:value={appearance} onchange={() => setThemePreference(appearance)}>
         <option value="system">{t("settings.appearance.system")}</option>
         <option value="light">{t("settings.appearance.light")}</option>
         <option value="dark">{t("settings.appearance.dark")}</option>
@@ -196,7 +196,7 @@
         <strong>{t("settings.appearance.tiles")}</strong>
         <p>{t("settings.appearance.tilesHint")}</p>
       </div>
-      <select class="input" value={display.tiles} onchange={(e) => setTileDensity(e.currentTarget.value as TileDensity)}>
+      <select aria-label={t("settings.appearance.tiles")} class="input" value={display.tiles} onchange={(e) => setTileDensity(e.currentTarget.value as TileDensity)}>
         <option value="standard">{t("settings.appearance.tilesStandard")}</option>
         <option value="compact">{t("settings.appearance.tilesCompact")}</option>
       </select>
@@ -211,7 +211,7 @@
           <strong>{t("update.auto")}</strong>
           <p>{t("update.autoHint")}</p>
         </div>
-        <select class="input" bind:value={settings.check_updates} onchange={save}>
+        <select aria-label={t("update.auto")} class="input" bind:value={settings.check_updates} onchange={save}>
           <option value={true}>{t("common.enabled")}</option>
           <option value={false}>{t("common.disabled")}</option>
         </select>
@@ -243,7 +243,7 @@
           <strong>{t("settings.autoLock")}</strong>
           <p>{t("settings.autoLockHint")}</p>
         </div>
-        <select class="input" bind:value={settings.auto_lock_minutes} onchange={save}>
+        <select aria-label={t("settings.autoLock")} class="input" bind:value={settings.auto_lock_minutes} onchange={save}>
           {#each [1, 5, 10, 30] as m}<option value={m}>{tn("duration.minutes", m)}</option>{/each}
           <option value={60}>{t("duration.hour")}</option>
           <option value={0}>{t("duration.never")}</option>
@@ -254,7 +254,7 @@
           <strong>{t("settings.systemLock")}</strong>
           <p>{t(IS_MAC ? "settings.systemLockHintMac" : "settings.systemLockHint")}</p>
         </div>
-        <select class="input" bind:value={settings.lock_on_system_events} onchange={save}>
+        <select aria-label={t("settings.systemLock")} class="input" bind:value={settings.lock_on_system_events} onchange={save}>
           <option value={true}>{t("common.enabled")}</option>
           <option value={false}>{t("common.disabled")}</option>
         </select>
@@ -264,7 +264,7 @@
           <strong>{t("settings.lockSessions")}</strong>
           <p>{t("settings.lockSessionsHint")}</p>
         </div>
-        <select class="input" bind:value={settings.lock_closes_sessions} onchange={save}>
+        <select aria-label={t("settings.lockSessions")} class="input" bind:value={settings.lock_closes_sessions} onchange={save}>
           <option value={true}>{t("settings.lockSessionsClose")}</option>
           <option value={false}>{t("settings.lockSessionsKeep")}</option>
         </select>
@@ -274,7 +274,7 @@
           <strong>{t("settings.clipboard")}</strong>
           <p>{t("settings.clipboardHint")}</p>
         </div>
-        <select class="input" bind:value={settings.clipboard_clear_seconds} onchange={save}>
+        <select aria-label={t("settings.clipboard")} class="input" bind:value={settings.clipboard_clear_seconds} onchange={save}>
           <option value={15}>{t("duration.seconds", { count: 15 })}</option>
           <option value={30}>{t("duration.seconds", { count: 30 })}</option>
           <option value={60}>{tn("duration.minutes", 1)}</option>
@@ -286,7 +286,7 @@
           <strong>{t("settings.oidcReauth")}</strong>
           <p>{t("settings.oidcReauthHint")}</p>
         </div>
-        <select class="input" bind:value={settings.oidc_reauth_minutes} onchange={save}>
+        <select aria-label={t("settings.oidcReauth")} class="input" bind:value={settings.oidc_reauth_minutes} onchange={save}>
           <option value={0}>{t("settings.oidcReauthAlways")}</option>
           {#each [5, 15, 30] as m}
             <option value={m}>{t("settings.oidcReauthAfter", { duration: tn("duration.minutes", m) })}</option>
@@ -341,7 +341,7 @@
           <strong>{t("settings.terminal.theme")}</strong>
           <p>{t("settings.terminal.themeHint")}</p>
         </div>
-        <select class="input" bind:value={settings.terminal_theme} onchange={save}>
+        <select aria-label={t("settings.terminal.theme")} class="input" bind:value={settings.terminal_theme} onchange={save}>
           {#each THEMES as [id, name]}<option value={id}>{themeLabel(name)}</option>{/each}
         </select>
       </div>
@@ -350,7 +350,7 @@
           <strong>{t("settings.terminal.fontSize")}</strong>
           <p>{t("settings.terminal.fontSizeHint")}</p>
         </div>
-        <input class="input" type="number" min="8" max="32" bind:value={settings.terminal_font_size} onchange={save} />
+        <input class="input" type="number" min="8" max="32" aria-label={t("settings.terminal.fontSize")} bind:value={settings.terminal_font_size} onchange={save} />
       </div>
     </section>
     {/if}
@@ -362,7 +362,7 @@
           <strong>{t("settings.localTerm.enable")}</strong>
           <p>{t(IS_WINDOWS ? "settings.localTerm.hintWindows" : "settings.localTerm.hint")}</p>
         </div>
-        <select class="input" value={display.localTerm ? "on" : "off"} onchange={(e) => setLocalTermEnabled(e.currentTarget.value === "on")}>
+        <select aria-label={t("settings.localTerm.enable")} class="input" value={display.localTerm ? "on" : "off"} onchange={(e) => setLocalTermEnabled(e.currentTarget.value === "on")}>
           <option value="on">{t("common.enabled")}</option>
           <option value="off">{t("common.disabled")}</option>
         </select>
