@@ -1,0 +1,57 @@
+Quayline: additional permission for Apple app stores
+
+Copyright (C) 2026 The Quayline authors
+
+Quayline is free software, licensed under the GNU General Public License, version 3
+or (at your option) any later version (the "GPL"), whose text is in the LICENSE
+file. The terms of service of Apple's app distribution services may conflict with
+the GPL. The copyright holders of Quayline do not want this conflict to prevent the
+otherwise compliant distribution of Quayline, or of works based on it, through
+those services. They therefore grant the following additional permission, under
+section 7 of the GNU General Public License, version 3.
+
+1. Permission
+
+   You may convey the Program, or a work based on it, in object code form through
+   Apple's App Store and TestFlight, for devices running iOS or iPadOS (the "Apple
+   Stores"), even though the terms of service, usage rules, digital rights
+   management and code-signing requirements of the Apple Stores impose restrictions
+   that the GPL would otherwise forbid. In particular, for copies conveyed through
+   the Apple Stores, and only to the extent that the terms of the Apple Stores
+   require it:
+
+   a) the restrictions imposed by the Apple Stores on the recipients of those
+      copies are not "further restrictions" within the meaning of section 10 of the
+      GPL; and
+
+   b) you are not required to provide the Installation Information mentioned in
+      section 6 of the GPL.
+
+2. Conditions
+
+   This permission applies only if, for each covered work you convey through the
+   Apple Stores, you comply with the GPL in all other respects, and in particular:
+
+   a) you make the Corresponding Source of the exact version conveyed through the
+      Apple Stores available under the terms of the GPL, at no charge, through a
+      channel that is not subject to the terms of the Apple Stores (for example a
+      public source code repository); and
+
+   b) the application, as conveyed, tells its users that it is licensed under the
+      GPL with this additional permission, and where to obtain the texts of the GPL
+      and of this permission and the Corresponding Source.
+
+3. Scope
+
+   This permission is granted only by the copyright holders of the parts of the
+   Program to which it is attached. It does not apply to any other code that you
+   combine with the Program and that is licensed under the GPL without this
+   permission.
+
+   This permission applies to version 3 of the GPL and to any later version of the
+   GPL that you choose to apply under section 14.
+
+   As section 7 of the GPL allows, you may remove this additional permission from
+   your copy of the Program, or from a work based on it. If you convey a modified
+   version of the Program that still includes this file, you grant this same
+   permission for your modifications.

@@ -55,7 +55,7 @@ install -Dm644 src-tauri/icons/128x128@2x.png %{buildroot}%{_datadir}/icons/hico
 install -Dm644 src-tauri/icons/icon.png %{buildroot}%{_datadir}/icons/hicolor/512x512/apps/%{name}.png
 
 %files
-%license LICENSE
+%license LICENSE LICENSE-APPSTORE
 %{_bindir}/%{name}
 %{_datadir}/applications/Quayline.desktop
 %{_metainfodir}/dev.memepas.quayline.metainfo.xml

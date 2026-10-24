@@ -5,7 +5,7 @@
 ## English
 
 A security-focused SSH and SFTP client for Linux (Fedora, KDE Plasma and GNOME),
-macOS and Windows 11 (preview). Servers, credentials and keys are kept in an encrypted vault, on your machine
+macOS and Windows 11. Servers, credentials and keys are kept in an encrypted vault, on your machine
 only.
 
 The interface is available in English and French (Settings → General → Language).
@@ -106,7 +106,7 @@ Applications. The app is signed (Developer ID) and notarized by Apple, and insta
 its updates itself once you agree. The vault is stored in
 `~/Library/Application Support/dev.memepas.quayline/`.
 
-#### Windows 11 (preview)
+#### Windows 11
 
 Download `Quayline-X.Y.Z-windows-x64-setup.exe` from the
 [releases](https://github.com/Meme-Pas-Dev/Quayline/releases) and run it. The installer
@@ -121,6 +121,13 @@ Get-FileHash .\Quayline-*-windows-x64-setup.exe   # compare with SHA256SUMS.wind
 
 Security keys (FIDO2) go through Windows' own window (key choice, PIN, touch). The
 vault is stored in `%APPDATA%\dev.memepas.quayline\`.
+
+Two differences with Linux and macOS, as long as the installer is not signed:
+
+- updates are installed by hand: the app announces new versions, to install the same
+  way (the vault is kept);
+- the local terminal is off by default (Settings → Terminal): some corporate security
+  software (EDR) blocks an unsigned program that opens a console.
 
 ### Usage
 
@@ -206,12 +213,18 @@ Quayline is free software, distributed under the
 [GNU GPL version 3 or later](LICENSE). Any modified version that is redistributed
 must be released under the same license, with its source code.
 
+An [additional permission](LICENSE-APPSTORE) (GPL section 7) allows distribution
+through Apple's App Store and TestFlight for iOS and iPadOS, whose terms otherwise
+conflict with the GPL, provided the source code of the distributed version stays freely
+available outside the store. Contributions are accepted under the same terms
+([CONTRIBUTING.md](CONTRIBUTING.md)).
+
 ---
 
 ## Français
 
-Client SSH et SFTP pour Linux (Fedora, KDE Plasma et GNOME), macOS et Windows 11
-(préversion), pensé pour la sécurité. Serveurs, identifiants et clés sont rangés dans un coffre chiffré, sur votre
+Client SSH et SFTP pour Linux (Fedora, KDE Plasma et GNOME), macOS et Windows 11,
+pensé pour la sécurité. Serveurs, identifiants et clés sont rangés dans un coffre chiffré, sur votre
 machine uniquement.
 
 L'interface est en français et en anglais (Réglages → Général → Langue).
@@ -312,7 +325,7 @@ glisser Quayline dans Applications. L'application est signée (Developer ID) et
 notarisée par Apple, et installe elle-même ses mises à jour après votre accord. Le
 coffre est rangé dans `~/Library/Application Support/dev.memepas.quayline/`.
 
-#### Windows 11 (préversion)
+#### Windows 11
 
 Télécharger `Quayline-X.Y.Z-windows-x64-setup.exe` dans les
 [releases](https://github.com/Meme-Pas-Dev/Quayline/releases) et le lancer.
@@ -328,6 +341,13 @@ Get-FileHash .\Quayline-*-windows-x64-setup.exe   # à comparer avec SHA256SUMS.
 
 Les clés de sécurité (FIDO2) passent par la fenêtre de Windows (choix de la clé, code
 PIN, toucher). Le coffre est rangé dans `%APPDATA%\dev.memepas.quayline\`.
+
+Deux différences avec Linux et macOS, tant que l'installateur n'est pas signé :
+
+- les mises à jour s'installent à la main : l'application annonce les nouvelles
+  versions, à installer de la même façon (le coffre est conservé) ;
+- le terminal local est désactivé par défaut (Réglages → Terminal) : certains logiciels
+  de sécurité d'entreprise (EDR) bloquent un programme non signé qui ouvre une console.
 
 ### Utilisation
 
@@ -418,3 +438,10 @@ jour n'est téléchargée depuis GitHub qu'après votre accord.
 Quayline est un logiciel libre, distribué sous licence
 [GNU GPL version 3 ou ultérieure](LICENSE). Toute version modifiée et redistribuée doit
 l'être sous la même licence, avec son code source.
+
+Une [permission additionnelle](LICENSE-APPSTORE) (section 7 de la GPL, texte en
+anglais) autorise la distribution par l'App Store et TestFlight d'Apple pour iOS et
+iPadOS, dont les conditions sont sinon incompatibles avec la GPL, à condition que
+le code source de la version distribuée reste librement disponible hors de la
+boutique. Les contributions sont acceptées aux mêmes conditions
+([CONTRIBUTING.md](CONTRIBUTING.md)).

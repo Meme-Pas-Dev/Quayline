@@ -20,6 +20,48 @@ de texte à sa release GitHub.
 - Paquet Debian et Ubuntu (`.deb`, préversion) : Debian 12 ou plus récent, Ubuntu 22.04
   ou plus récent et leurs dérivées, joint à chaque release avec une empreinte signée.
 
+## [1.12.1] - 2026-10-24
+
+### English
+
+**Changed**
+- Windows is no longer a preview: same features as Linux and macOS, tested on every
+  version since 1.7.0. The installer is still unsigned (SmartScreen warning) and
+  updates are installed by hand.
+
+**Added**
+- License: an additional permission (GPL section 7, `LICENSE-APPSTORE`) allows
+  distribution through Apple's app stores, provided the source code stays freely
+  available; contribution rules (`CONTRIBUTING.md`). The license itself is unchanged
+  (GPL-3.0-or-later).
+
+**Security**
+- ctutils 0.4.5 (RUSTSEC-2026-0385): constant-time comparisons in the cryptography
+  used by SSH.
+- crypto-bigint 0.7.6 (RUSTSEC-2026-0387): constant-time arithmetic in the
+  cryptography used by SSH. tokio 1.54.1 (RUSTSEC-2026-0386). clipboard-win 5.4.3
+  (Windows; the previous version was withdrawn).
+
+### Français
+
+**Modifié**
+- Windows n'est plus une préversion : mêmes fonctions que sous Linux et macOS, testées
+  à chaque version depuis la 1.7.0. L'installateur n'est toujours pas signé
+  (avertissement SmartScreen) et les mises à jour s'installent à la main.
+
+**Ajouté**
+- Licence : une permission additionnelle (section 7 de la GPL, `LICENSE-APPSTORE`)
+  autorise la distribution par les boutiques d'applications d'Apple, à condition que le
+  code source reste librement disponible ; règles de contribution (`CONTRIBUTING.md`).
+  La licence elle-même ne change pas (GPL-3.0-or-later).
+
+**Sécurité**
+- ctutils 0.4.5 (RUSTSEC-2026-0385) : comparaisons en temps constant dans la
+  cryptographie utilisée par SSH.
+- crypto-bigint 0.7.6 (RUSTSEC-2026-0387) : calculs en temps constant dans la
+  cryptographie utilisée par SSH. tokio 1.54.1 (RUSTSEC-2026-0386). clipboard-win
+  5.4.3 (Windows ; la version précédente avait été retirée).
+
 ## [1.12.0] - 2026-10-21
 
 ### English
