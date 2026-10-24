@@ -18,7 +18,7 @@ downloads for your system).
 - **Tabbed SSH terminal** and dual-pane **SFTP browser** (drag and drop, background
   transfers, permissions); each one opens from the other. Remote files can be edited in
   a built-in editor or in the system's default application, changes being sent back to
-  the server.
+  the server. tmux and vim can copy to your clipboard (OSC 52, write only).
 - **Local terminal** in a tab, next to SSH sessions (RPM, macOS and Windows; not in the
   Flatpak, which stays isolated from the system). Off by default on Windows: turn it on
   in Settings → Terminal.
@@ -237,7 +237,8 @@ téléchargement pour votre système).
 - **Terminal SSH** à onglets, **explorateur SFTP** en double panneau (glisser-déposer,
   transferts en arrière-plan, permissions), ouverture de l'un depuis l'autre. Les
   fichiers distants se modifient dans un éditeur intégré ou dans l'application par
-  défaut du système, les changements étant renvoyés au serveur.
+  défaut du système, les changements étant renvoyés au serveur. tmux et vim peuvent
+  copier dans votre presse-papiers (OSC 52, en écriture seule).
 - **Terminal local** dans un onglet, à côté des sessions SSH (RPM, macOS et Windows ;
   pas dans le Flatpak, qui reste isolé du système). Désactivé par défaut sous Windows :
   à activer dans Réglages → Terminal.

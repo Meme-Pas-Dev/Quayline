@@ -868,5 +868,7 @@
   "settings.localTerm.hint": "A shell of this computer in a tab: “Local terminal” button on the Hosts page and keyboard shortcut.",
   "settings.localTerm.hintWindows": "Off by default on Windows: until the application is signed, some corporate security software (EDR) blocks Quayline when it opens a console. Turn it on if your computer has no such software, or if your IT team allows it.",
   "err.oidc.noAuthTime": "{provider} did not give the time of your sign-in: Quayline cannot check that it is recent. Update {provider}, then try again.",
-  "editor.contentLabel": "Contents of {name}"
+  "editor.contentLabel": "Contents of {name}",
+  "settings.terminal.osc52": "Copy from the server",
+  "settings.terminal.osc52Hint": "Lets tmux, vim and other programs copy text to your clipboard (OSC 52). They can never read it."
 }

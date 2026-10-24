@@ -868,5 +868,7 @@
   "settings.localTerm.hint": "Un shell de cet ordinateur dans un onglet : bouton « Terminal local » de la page Hôtes et raccourci clavier.",
   "settings.localTerm.hintWindows": "Désactivé par défaut sous Windows : tant que l'application n'est pas signée, certains logiciels de sécurité d'entreprise (EDR) bloquent Quayline quand il ouvre une console. Activez-le si votre ordinateur n'en a pas, ou si votre service informatique l'autorise.",
   "err.oidc.noAuthTime": "{provider} n'a pas indiqué l'heure de votre connexion : Quayline ne peut pas vérifier qu'elle est récente. Mettez {provider} à jour, puis réessayez.",
-  "editor.contentLabel": "Contenu de {name}"
+  "editor.contentLabel": "Contenu de {name}",
+  "settings.terminal.osc52": "Copie depuis le serveur",
+  "settings.terminal.osc52Hint": "Permet à tmux, vim et d'autres programmes de copier du texte dans votre presse-papiers (OSC 52). Ils ne peuvent jamais le lire."
 }

@@ -20,6 +20,7 @@
 | Fichier tronqué après une coupure | Téléchargement dans `.nom.part-…`, renommé seulement une fois complet et synchronisé |
 | Suppression locale par erreur | Les fichiers locaux vont à la corbeille (norme freedesktop, visible dans Dolphin) |
 | Mot de passe laissé dans le presse-papiers | Copié par le backend (jamais par l'interface), exclu des historiques du presse-papiers (KDE : `x-kde-passwordManagerHint` ; Windows : historique `Win+V` et synchronisation ; macOS : `org.nspasteboard.ConcealedType`), effacé après le délai réglé, au verrouillage et à la fermeture — seulement s'il est encore présent |
+| Programme distant qui lit ou remplit le presse-papiers (OSC 52) | Écriture seule : un serveur, ou un programme affiché dans la session, peut copier du texte (tmux, vim) mais une demande de lecture reste sans réponse ; presse-papiers système seulement, 1 million de caractères au plus, UTF-8 valide exigé ; désactivable (Réglages → Terminal). Gestionnaire propre plutôt que `@xterm/addon-clipboard`, qui répond aux lectures |
 | Session oubliée ouverte | Par défaut, le verrouillage ferme les terminaux, les explorateurs SFTP et annule les transferts. Si l'utilisateur choisit de garder les sessions, elles restent masquées et inertes (ni clavier ni souris) derrière l'écran de verrouillage, et le backend refuse toute action tant que le coffre est verrouillé (saisie, collage, transferts, opérations sur les fichiers) ; le contenu affiché des terminaux reste alors en mémoire |
 
 ## Ce que Quayline ne protège pas

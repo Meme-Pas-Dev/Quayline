@@ -17,7 +17,7 @@
   import { providerName } from "../oidcProviders";
   import { IS_MAC, IS_WINDOWS } from "../platform";
   import { checkForUpdate, update } from "../updates.svelte";
-  import { display, setLocalTermEnabled, setTileDensity, type TileDensity } from "../display.svelte";
+  import { display, setLocalTermEnabled, setOsc52Enabled, setTileDensity, type TileDensity } from "../display.svelte";
   import { APP_NAME } from "../identity";
   import UpdateActions from "../components/UpdateActions.svelte";
   import { formatList, intlLocale, languagePreference, setLanguagePreference, t, tn, type LanguagePreference, type MessageKey } from "../i18n/index.svelte";
@@ -351,6 +351,16 @@
           <p>{t("settings.terminal.fontSizeHint")}</p>
         </div>
         <input class="input" type="number" min="8" max="32" aria-label={t("settings.terminal.fontSize")} bind:value={settings.terminal_font_size} onchange={save} />
+      </div>
+      <div class="setting">
+        <div>
+          <strong>{t("settings.terminal.osc52")}</strong>
+          <p>{t("settings.terminal.osc52Hint")}</p>
+        </div>
+        <select aria-label={t("settings.terminal.osc52")} class="input" value={display.osc52 ? "on" : "off"} onchange={(e) => setOsc52Enabled(e.currentTarget.value === "on")}>
+          <option value="on">{t("common.enabled")}</option>
+          <option value="off">{t("common.disabled")}</option>
+        </select>
       </div>
     </section>
     {/if}

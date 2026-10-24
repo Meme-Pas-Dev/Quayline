@@ -9,6 +9,7 @@
   import { IS_MAC, KEYS, shortcut } from "../platform";
   import { closeSession, data, handleError, reconnect, type SessionTab } from "../store.svelte";
   import { TERMINAL_THEMES } from "../terminalThemes";
+  import { display } from "../display.svelte";
   import Icon from "./Icon.svelte";
   import SessionPrompts from "./SessionPrompts.svelte";
 
@@ -112,6 +113,35 @@
     if (text) await writeText(text);
   }
 
+  /** Taille maximale d'une copie demandée par le serveur (caractères). */
+  const OSC52_MAX = 1_000_000;
+
+  // OSC 52 (tmux `set-clipboard`, vim, etc.) : le serveur, ou un programme qui
+  // s'affiche dans la session, demande à copier du texte. Écriture seule : une demande
+  // de lecture (« ? ») reste sans réponse, sinon n'importe quel programme distant
+  // pourrait lire le presse-papiers (un mot de passe copié depuis le trousseau, par
+  // exemple). Gestionnaire propre plutôt que @xterm/addon-clipboard, qui répond aux
+  // lectures et vide le presse-papiers sur une donnée invalide.
+  function onOsc52(payload: string): boolean {
+    if (!display.osc52) return true;
+    const sep = payload.indexOf(";");
+    if (sep < 0) return true;
+    const target = payload.slice(0, sep);
+    const data = payload.slice(sep + 1);
+    // Presse-papiers système (« c ») ou cible par défaut (vide, ou « s » de tmux).
+    if (target && !/[cs]/.test(target)) return true;
+    if (data === "?" || !data || data.length > (OSC52_MAX * 4) / 3 + 4) return true;
+    let text: string;
+    try {
+      const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+      text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch {
+      return true;
+    }
+    if (text && text.length <= OSC52_MAX) writeText(text).catch(() => {});
+    return true;
+  }
+
   // Le presse-papiers est lu par le backend : l'interface n'y a pas accès.
   async function paste() {
     if (!sessionId || tab.status !== "connected" || !term) return;
@@ -145,6 +175,7 @@
       macOptionIsMeta: true,
     });
     term = terminal;
+    terminal.parser.registerOscHandler(52, onOsc52);
     fit = new FitAddon();
     terminal.loadAddon(fit);
 

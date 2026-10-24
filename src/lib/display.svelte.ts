@@ -31,7 +31,22 @@ function readLocalTerm(): boolean {
   }
 }
 
-export const display = $state<{ tiles: TileDensity; localTerm: boolean }>({ tiles: read(), localTerm: readLocalTerm() });
+const OSC52_KEY = "quayline.osc52";
+
+/** Copie demandée par le serveur (OSC 52 : tmux, vim…) : activée par défaut. */
+function readOsc52(): boolean {
+  try {
+    return localStorage.getItem(OSC52_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export const display = $state<{ tiles: TileDensity; localTerm: boolean; osc52: boolean }>({
+  tiles: read(),
+  localTerm: readLocalTerm(),
+  osc52: readOsc52(),
+});
 
 export function setTileDensity(value: TileDensity) {
   display.tiles = value;
@@ -48,6 +63,16 @@ export function setLocalTermEnabled(value: boolean) {
   try {
     if (value === LOCAL_TERM_DEFAULT) localStorage.removeItem(LOCAL_TERM_KEY);
     else localStorage.setItem(LOCAL_TERM_KEY, value ? "on" : "off");
+  } catch {
+    // Non mémorisé, mais appliqué pour cette session.
+  }
+}
+
+export function setOsc52Enabled(value: boolean) {
+  display.osc52 = value;
+  try {
+    if (value) localStorage.removeItem(OSC52_KEY);
+    else localStorage.setItem(OSC52_KEY, "off");
   } catch {
     // Non mémorisé, mais appliqué pour cette session.
   }

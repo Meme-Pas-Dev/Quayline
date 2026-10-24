@@ -20,6 +20,23 @@ de texte à sa release GitHub.
 - Paquet Debian et Ubuntu (`.deb`, préversion) : Debian 12 ou plus récent, Ubuntu 22.04
   ou plus récent et leurs dérivées, joint à chaque release avec une empreinte signée.
 
+## [1.13.0] - 2026-10-24
+
+### English
+
+**Added**
+- Terminal: tmux, vim and other programs can copy text to your clipboard (OSC 52), for
+  example with `set -g set-clipboard on` in tmux. Write only: a program can never read
+  your clipboard. Can be turned off in Settings → Terminal.
+
+### Français
+
+**Ajouté**
+- Terminal : tmux, vim et d'autres programmes peuvent copier du texte dans votre
+  presse-papiers (OSC 52), par exemple avec `set -g set-clipboard on` dans tmux.
+  Écriture seule : un programme ne peut jamais lire votre presse-papiers. Désactivable
+  dans Réglages → Terminal.
+
 ## [1.12.1] - 2026-10-24
 
 ### English
