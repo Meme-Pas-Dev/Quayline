@@ -16,7 +16,7 @@ downloads for your system).
 ### Features
 
 - **Tabbed SSH terminal** and dual-pane **SFTP browser** (drag and drop, background
-  transfers, permissions); each one opens from the other. Remote files can be edited in
+  transfers, permissions, sort by column); each one opens from the other. Remote files can be edited in
   a built-in editor or in the system's default application, changes being sent back to
   the server. tmux and vim can copy to your clipboard (OSC 52, write only).
 - **Local terminal** in a tab, next to SSH sessions (RPM, macOS and Windows; not in the
@@ -235,7 +235,7 @@ téléchargement pour votre système).
 ### Fonctionnalités
 
 - **Terminal SSH** à onglets, **explorateur SFTP** en double panneau (glisser-déposer,
-  transferts en arrière-plan, permissions), ouverture de l'un depuis l'autre. Les
+  transferts en arrière-plan, permissions, tri par colonne), ouverture de l'un depuis l'autre. Les
   fichiers distants se modifient dans un éditeur intégré ou dans l'application par
   défaut du système, les changements étant renvoyés au serveur. tmux et vim peuvent
   copier dans votre presse-papiers (OSC 52, en écriture seule).

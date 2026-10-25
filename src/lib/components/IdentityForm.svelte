@@ -6,7 +6,13 @@
   import PasswordInput from "./PasswordInput.svelte";
   import { toast } from "./toast.svelte";
 
-  let { identity, onclose }: { identity: Identity | null; onclose: () => void } = $props();
+  // `onsaved` : identité enregistrée (par exemple pour la choisir dans le formulaire
+  // d'hôte qui a ouvert celui-ci).
+  let {
+    identity,
+    onclose,
+    onsaved,
+  }: { identity: Identity | null; onclose: () => void; onsaved?: (saved: Identity) => void } = $props();
 
   // svelte-ignore state_referenced_locally
   const existing = identity;
@@ -42,7 +48,7 @@
     e.preventDefault();
     busy = true;
     try {
-      await api.identitySave({
+      const saved = await api.identitySave({
         id: existing?.id ?? null,
         label,
         username: username || null,
@@ -53,6 +59,7 @@
       password = privateKey = passphrase = "";
       await reload();
       toast(t(existing ? "identityForm.updated" : "identityForm.added"), "success");
+      onsaved?.(saved);
       onclose();
     } catch (err) {
       handleError(err);

@@ -870,5 +870,7 @@
   "err.oidc.noAuthTime": "{provider} n'a pas indiqué l'heure de votre connexion : Quayline ne peut pas vérifier qu'elle est récente. Mettez {provider} à jour, puis réessayez.",
   "editor.contentLabel": "Contenu de {name}",
   "settings.terminal.osc52": "Copie depuis le serveur",
-  "settings.terminal.osc52Hint": "Permet à tmux, vim et d'autres programmes de copier du texte dans votre presse-papiers (OSC 52). Ils ne peuvent jamais le lire."
+  "settings.terminal.osc52Hint": "Permet à tmux, vim et d'autres programmes de copier du texte dans votre presse-papiers (OSC 52). Ils ne peuvent jamais le lire.",
+  "hostForm.identityAdd": "+ Ajouter une identité…",
+  "files.sortBy": "Trier par {column}"
 }

@@ -2,6 +2,7 @@
   import { t } from "../i18n/index.svelte";
   import { api, type Host, type HostInput, type HostKind } from "../api";
   import Icon from "./Icon.svelte";
+  import IdentityForm from "./IdentityForm.svelte";
   import { data, handleError, reload } from "../store.svelte";
   import Modal from "./Modal.svelte";
   import { toast } from "./toast.svelte";
@@ -26,6 +27,19 @@
     notes: host?.notes ?? "",
   });
   let busy = $state(false);
+
+  // « Ajouter une identité » dans la liste : formulaire d'identité par-dessus celui-ci,
+  // puis la nouvelle identité est choisie. La liste garde l'ancien choix entre-temps.
+  const NEW_IDENTITY = "__new__";
+  let creatingIdentity = $state(false);
+  function onidentitychange(e: Event & { currentTarget: HTMLSelectElement }) {
+    if (e.currentTarget.value === NEW_IDENTITY) {
+      e.currentTarget.value = form.identityId;
+      creatingIdentity = true;
+    } else {
+      form.identityId = e.currentTarget.value;
+    }
+  }
 
   const groups = $derived([...new Set(data.hosts.map((h) => h.group).filter(Boolean))] as string[]);
 
@@ -117,9 +131,10 @@
     </label>
     <label class="field span2">
       <span>{t("hostForm.identity")}</span>
-      <select class="input" bind:value={form.identityId}>
+      <select class="input" value={form.identityId} onchange={onidentitychange}>
         <option value="">{t("hostForm.identityNone")}</option>
         {#each data.identities as i}<option value={i.id}>{i.label}</option>{/each}
+        <option value={NEW_IDENTITY}>{t("hostForm.identityAdd")}</option>
       </select>
     </label>
 
@@ -155,6 +170,10 @@
     <button class="btn primary" type="submit" form="host-form" disabled={busy || !form.hostname}>{t("common.save")}</button>
   {/snippet}
 </Modal>
+
+{#if creatingIdentity}
+  <IdentityForm identity={null} onclose={() => (creatingIdentity = false)} onsaved={(saved) => (form.identityId = saved.id)} />
+{/if}
 
 <style>
   .grid {

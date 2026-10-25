@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { t, tn } from "../i18n/index.svelte";
+  import { intlLocale, t, tn, type MessageKey } from "../i18n/index.svelte";
   import type { FileEntry } from "../api";
   import { displayName, formatDate, formatSize } from "../format";
   import ConfirmDialog from "./ConfirmDialog.svelte";
@@ -91,7 +91,52 @@
   >(null);
   let paneEl: HTMLDivElement;
 
-  const visible = $derived(showHidden ? entries : entries.filter((e) => !e.name.startsWith(".")));
+  // Tri par colonne (clic sur l'en-tête ; second clic : ordre inverse). Dossiers
+  // toujours en tête. Retenu par panneau (local, distant).
+  type SortKey = "name" | "permissions" | "size" | "modified";
+  type SortDir = "asc" | "desc";
+  // svelte-ignore state_referenced_locally
+  const SORT_KEY = `quayline.files.sort.${side}`;
+  const SORT_KEYS: SortKey[] = ["name", "permissions", "size", "modified"];
+  let sort = $state(readSort());
+  function readSort(): { key: SortKey; dir: SortDir } {
+    try {
+      const [key, dir] = (localStorage.getItem(SORT_KEY) ?? "").split(":");
+      if (SORT_KEYS.includes(key as SortKey) && (dir === "asc" || dir === "desc")) return { key: key as SortKey, dir };
+    } catch {
+      // Préférence illisible : tri par nom.
+    }
+    return { key: "name", dir: "asc" };
+  }
+  function sortBy(key: SortKey) {
+    // Nouvelle colonne : noms de A à Z, tailles et dates du plus grand / récent.
+    const dir: SortDir = sort.key === key ? (sort.dir === "asc" ? "desc" : "asc") : key === "name" || key === "permissions" ? "asc" : "desc";
+    sort = { key, dir };
+    try {
+      localStorage.setItem(SORT_KEY, `${key}:${dir}`);
+    } catch {
+      // Préférence non retenue : sans conséquence.
+    }
+  }
+  const collator = $derived(new Intl.Collator(intlLocale(), { numeric: true, sensitivity: "base" }));
+  function compare(a: FileEntry, b: FileEntry): number {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    const byName = collator.compare(a.name, b.name);
+    let c = 0;
+    if (sort.key === "size") c = a.isDir ? 0 : a.size - b.size;
+    else if (sort.key === "modified") c = (a.modified ?? -Infinity) - (b.modified ?? -Infinity);
+    else if (sort.key === "permissions") c = (a.permissions ?? "").localeCompare(b.permissions ?? "");
+    else c = byName;
+    if (c === 0 && sort.key !== "name") return byName;
+    return sort.dir === "asc" ? c : -c;
+  }
+  const visible = $derived([...(showHidden ? entries : entries.filter((e) => !e.name.startsWith(".")))].sort(compare));
+  const COLUMNS = $derived<[SortKey, MessageKey, string][]>([
+    ["name", "files.name", ""],
+    ...(showPerms ? [["permissions", "files.permissions", ""] as [SortKey, MessageKey, string]] : []),
+    ["size", "files.size", "num"],
+    ["modified", "files.modified", ""],
+  ]);
   const selection = $derived(visible.filter((e) => selected.has(e.path)));
   const hiddenCount = $derived(entries.length - entries.filter((e) => !e.name.startsWith(".")).length);
 
@@ -352,10 +397,18 @@
   <!-- Grille ARIA : en-têtes de colonnes, lignes sélectionnables (lecteurs d'écran). -->
   <div class="table" class:perms={showPerms} role="grid" aria-multiselectable="true" aria-label={title}>
     <div class="thead" role="row">
-      <span role="columnheader">{t("files.name")}</span>
-      {#if showPerms}<span role="columnheader">{t("files.permissions")}</span>{/if}
-      <span class="num" role="columnheader">{t("files.size")}</span>
-      <span role="columnheader">{t("files.modified")}</span>
+      {#each COLUMNS as [key, label, cls] (key)}
+        <span
+          class={cls}
+          role="columnheader"
+          aria-sort={sort.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+        >
+          <button type="button" class="sort" class:active={sort.key === key} onclick={() => sortBy(key)} title={t("files.sortBy", { column: t(label) })}>
+            <span>{t(label)}</span>
+            {#if sort.key === key}<Icon name={sort.dir === "asc" ? "arrowUp" : "arrowDown"} size={12} />{/if}
+          </button>
+        </span>
+      {/each}
     </div>
     <div class="tbody" role="rowgroup">
       {#if error}
@@ -632,6 +685,37 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     border-bottom: 1px solid var(--border);
+  }
+  .sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+  }
+  .sort > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sort:hover,
+  .sort.active {
+    color: var(--text);
+  }
+  .sort:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .num .sort {
+    flex-direction: row-reverse;
   }
   .tbody {
     flex: 1;

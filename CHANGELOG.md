@@ -20,6 +20,28 @@ de texte à sa release GitHub.
 - Paquet Debian et Ubuntu (`.deb`, préversion) : Debian 12 ou plus récent, Ubuntu 22.04
   ou plus récent et leurs dérivées, joint à chaque release avec une empreinte signée.
 
+## [1.14.0] - 2026-10-25
+
+### English
+
+**Added**
+- New host: “+ Add an identity…” at the end of the keychain identity list opens the
+  identity form over the host form; the new identity is then selected, without leaving
+  the host being created.
+- SFTP: sort by column (name, permissions, size, date): click a column header, click
+  again to reverse the order. Folders stay first; the order is remembered for each
+  side.
+
+### Français
+
+**Ajouté**
+- Nouvel hôte : « + Ajouter une identité… », en fin de liste des identités du
+  trousseau, ouvre le formulaire d'identité par-dessus celui de l'hôte ; la nouvelle
+  identité est ensuite choisie, sans quitter l'hôte en cours de création.
+- SFTP : tri par colonne (nom, permissions, taille, date) : clic sur l'en-tête, second
+  clic pour inverser l'ordre. Les dossiers restent en tête ; l'ordre est retenu pour
+  chaque panneau.
+
 ## [1.13.0] - 2026-10-24
 
 ### English
