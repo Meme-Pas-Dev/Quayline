@@ -109,11 +109,13 @@ export function openSession(host: Host, kind: "ssh" | "sftp" = "ssh") {
   ui.active = key;
 }
 
-/** Terminal local disponible (RPM, macOS, Windows ; pas le Flatpak). Lu au démarrage. */
-export const caps = $state({ localTerm: false });
+/** Terminal local disponible (RPM, macOS, Windows ; pas le Flatpak) ; mises à jour
+ *  livrées par une boutique (Flathub). Lus au démarrage. */
+export const caps = $state({ localTerm: false, updatesByStore: false });
 
 export async function loadCaps() {
   caps.localTerm = await api.localTermAvailable().catch(() => false);
+  caps.updatesByStore = await api.appInfo().then((i) => i.updates_by_store).catch(() => false);
 }
 
 /** Ouvre un terminal sur cette machine, ou explique pourquoi c'est impossible. */

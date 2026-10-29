@@ -872,5 +872,6 @@
   "settings.terminal.osc52": "Copy from the server",
   "settings.terminal.osc52Hint": "Lets tmux, vim and other programs copy text to your clipboard (OSC 52). They can never read it.",
   "hostForm.identityAdd": "+ Add an identity…",
-  "files.sortBy": "Sort by {column}"
+  "files.sortBy": "Sort by {column}",
+  "update.byStore": "Updates for this version of {app} come from Flathub: GNOME Software, Discover or flatpak update."
 }

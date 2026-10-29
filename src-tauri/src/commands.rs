@@ -32,6 +32,7 @@ pub struct AppInfo {
     build: &'static str,
     commit: &'static str,
     flatpak: bool,
+    updates_by_store: bool,
 }
 
 #[tauri::command]
@@ -42,6 +43,7 @@ pub fn app_info(app: AppHandle) -> AppInfo {
         build: crate::identity::BUILD,
         commit: crate::identity::COMMIT,
         flatpak: crate::identity::is_flatpak(),
+        updates_by_store: crate::identity::UPDATES_BY_STORE,
     }
 }
 

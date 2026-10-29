@@ -100,6 +100,10 @@ fn macos_assets(assets: &[Asset], version: &str) -> Option<(Asset, Asset)> {
 /// Nouvelle version disponible, ou rien si l'application est à jour.
 #[tauri::command]
 pub async fn update_check(app: AppHandle, state: State<'_, UpdateState>) -> CmdResult<Option<UpdateInfo>> {
+    // Version d'une boutique (Flathub) : c'est elle qui livre les mises à jour.
+    if crate::identity::UPDATES_BY_STORE {
+        return Ok(None);
+    }
     let current = app.package_info().version.to_string();
     let current = parse_version(&current).ok_or_else(|| update_err(tr!("err.update.version")))?;
 

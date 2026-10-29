@@ -872,5 +872,6 @@
   "settings.terminal.osc52": "Copie depuis le serveur",
   "settings.terminal.osc52Hint": "Permet à tmux, vim et d'autres programmes de copier du texte dans votre presse-papiers (OSC 52). Ils ne peuvent jamais le lire.",
   "hostForm.identityAdd": "+ Ajouter une identité…",
-  "files.sortBy": "Trier par {column}"
+  "files.sortBy": "Trier par {column}",
+  "update.byStore": "Les mises à jour de cette version de {app} viennent de Flathub : Logiciels, Discover ou flatpak update."
 }

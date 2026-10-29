@@ -145,6 +145,8 @@ export interface AppInfo {
   build: string;
   commit: string;
   flatpak: boolean;
+  /** Mises à jour livrées par une boutique (Flathub) : pas de recherche. */
+  updates_by_store: boolean;
 }
 
 export interface Fido2Key {

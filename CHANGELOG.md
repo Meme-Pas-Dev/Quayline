@@ -20,6 +20,24 @@ de texte à sa release GitHub.
 - Paquet Debian et Ubuntu (`.deb`, préversion) : Debian 12 ou plus récent, Ubuntu 22.04
   ou plus récent et leurs dérivées, joint à chaque release avec une empreinte signée.
 
+## [1.14.1] - 2026-10-25
+
+### English
+
+**Changed**
+- Software centres (GNOME Software, Discover) show a fuller description of Quayline,
+  the notes of the latest versions and its brand colours.
+- Preparation for Flathub: the Flathub version will leave updates to Flathub, without
+  checking GitHub for new versions. The other versions are unchanged.
+
+### Français
+
+**Modifié**
+- Les logithèques (Logiciels, Discover) affichent une description plus complète de
+  Quayline, les notes des dernières versions et ses couleurs.
+- Préparation pour Flathub : la version Flathub laissera les mises à jour à Flathub,
+  sans chercher de nouvelle version sur GitHub. Les autres versions ne changent pas.
+
 ## [1.14.0] - 2026-10-25
 
 ### English

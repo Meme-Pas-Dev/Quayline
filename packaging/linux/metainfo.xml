@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Métadonnées AppStream (Discover, GNOME Logiciels, Flathub), en anglais avec la
-     traduction française. Gabarit : voir metainfo.sh. -->
+     traduction française. Gabarit : voir metainfo.sh (versions, captures). -->
 <component type="desktop-application">
   <id>dev.memepas.quayline</id>
   <name>Quayline</name>
@@ -13,28 +13,61 @@
   </developer>
   <description>
     <p>
-      A security-focused SSH and SFTP client for KDE Plasma and GNOME. Servers,
+      A security-focused SSH and SFTP client. Servers,
       credentials and keys are kept in a locally encrypted vault (Argon2id,
       XChaCha20-Poly1305), unlocked with a master password, a FIDO2 security key or an
       OpenID Connect identity provider (Pocket ID, Authentik, Keycloak…).
     </p>
     <p xml:lang="fr">
-      Client SSH et SFTP pour KDE Plasma et GNOME, pensé pour la sécurité. Serveurs,
+      Client SSH et SFTP pensé pour la sécurité. Serveurs,
       identifiants et clés sont conservés dans un coffre chiffré localement (Argon2id,
       XChaCha20-Poly1305), ouvert par un mot de passe maître, une clé de sécurité FIDO2 ou
       un fournisseur d'identité OpenID Connect (Pocket ID, Authentik, Keycloak…).
     </p>
+    <ul>
+      <li>Tabbed SSH terminal, with copy from tmux and vim (OSC 52, write only)</li>
+      <li xml:lang="fr">Terminal SSH à onglets, avec la copie depuis tmux et vim (OSC 52, en écriture seule)</li>
+      <li>Dual-pane SFTP browser: drag and drop, background transfers, permissions, sort by column</li>
+      <li xml:lang="fr">Explorateur SFTP en double panneau : glisser-déposer, transferts en arrière-plan, permissions, tri par colonne</li>
+      <li>Remote files edited in a built-in editor or in your usual application, changes sent back to the server</li>
+      <li xml:lang="fr">Fichiers distants modifiés dans un éditeur intégré ou dans votre application habituelle, changements renvoyés au serveur</li>
+      <li>Host key verification, automatic lock with the session, clipboard cleared after copying a password</li>
+      <li xml:lang="fr">Vérification des clés d'hôte, verrouillage avec la session, presse-papiers effacé après la copie d'un mot de passe</li>
+      <li>Encrypted export and import, to back up the vault or move it to another computer</li>
+      <li xml:lang="fr">Export et import chiffrés, pour sauvegarder le coffre ou le déplacer sur un autre ordinateur</li>
+    </ul>
     <p>
-      Tabbed SSH terminal, dual-pane SFTP browser, host key verification, automatic lock
-      and clipboard clearing. The interface is available in English and French.
+      The interface is available in English and French. No account, no telemetry: data
+      stays on your computer.
     </p>
     <p xml:lang="fr">
-      Terminal SSH à onglets, explorateur SFTP en double panneau, vérification des clés
-      d'hôte, verrouillage automatique et effacement du presse-papiers. L'interface est en
-      anglais et en français.
+      L'interface est en anglais et en français. Ni compte ni télémétrie : les données
+      restent sur votre ordinateur.
     </p>
   </description>
   <launchable type="desktop-id">@DESKTOP_ID@</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Hosts grouped by folder, with their keychain identity</caption>
+      <caption xml:lang="fr">Hôtes rangés par groupe, avec leur identité du trousseau</caption>
+      <image>@SCREENSHOTS@/01-hosts.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>SSH terminal</caption>
+      <caption xml:lang="fr">Terminal SSH</caption>
+      <image>@SCREENSHOTS@/02-terminal.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Dual-pane SFTP browser</caption>
+      <caption xml:lang="fr">Explorateur SFTP en double panneau</caption>
+      <image>@SCREENSHOTS@/03-sftp.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Lock screen: master password, security key or identity provider</caption>
+      <caption xml:lang="fr">Écran de verrouillage : mot de passe maître, clé de sécurité ou fournisseur d'identité</caption>
+      <image>@SCREENSHOTS@/04-lock.png</image>
+    </screenshot>
+  </screenshots>
   <url type="homepage">https://memepas.dev/en/quayline/</url>
   <url type="bugtracker">https://github.com/Meme-Pas-Dev/Quayline/issues</url>
   <url type="vcs-browser">https://github.com/Meme-Pas-Dev/Quayline</url>
@@ -51,11 +84,22 @@
     <lang percentage="100">en</lang>
     <lang percentage="100">fr</lang>
   </languages>
+  <branding>
+    <color type="primary" scheme_preference="light">#c9eee6</color>
+    <color type="primary" scheme_preference="dark">#142043</color>
+  </branding>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
   <provides>
     <binary>quayline</binary>
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="@VERSION@" date="@DATE@"/>
+@RELEASES@
   </releases>
 </component>

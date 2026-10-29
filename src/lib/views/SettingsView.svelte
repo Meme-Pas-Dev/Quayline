@@ -205,6 +205,9 @@
 
   <section class="card">
     <h2><Icon name="refresh" size={17} /> {t("update.title")}</h2>
+    {#if caps.updatesByStore}
+      <p class="faint">{t("update.byStore", { app: APP_NAME })}</p>
+    {:else}
     {#if settings}
       <div class="setting">
         <div>
@@ -233,6 +236,7 @@
         <span class="faint">{t("update.upToDate", { app: APP_NAME })}</span>
       {/if}
     </div>
+    {/if}
   </section>
   {:else if tab === "security"}
     {#if settings}

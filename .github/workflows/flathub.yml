@@ -1,0 +1,91 @@
+name: Flathub
+
+# Essai de la soumission Flathub, à la demande seulement (onglet Actions → Flathub →
+# Run workflow) : manifeste et sources générés par scripts/flathub.sh à partir de la
+# copie, compilation sans réseau dans le SDK GNOME (comme sur Flathub), puis
+# flatpak-builder-lint (manifeste et dépôt). Une vingtaine de minutes Linux.
+#
+# Directement sur la machine Ubuntu, sans conteneur : avec l'image flatpak-github-actions
+# et les quelque 1 700 sources hors ligne, la machine était perdue sans journal (disque
+# plein, probablement). On libère d'abord l'espace des outils inutiles ici.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flathub:
+    name: Compilation hors ligne et lint (GNOME 50)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Libération de l'espace disque
+        run: |
+          df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /usr/share/swift /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -af >/dev/null 2>&1 || true
+          df -h / | tail -1
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # build-info : fourni par la publication (dépôt public), sinon nombre de commits.
+      - name: Numéro de build
+        run: |
+          [ -s build-info ] || printf '%s\n%s\n' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)" > build-info
+          cat build-info
+
+      - name: Flatpak, SDK GNOME 50 et outils de Flathub
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq flatpak flatpak-builder >/dev/null
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+            org.gnome.Platform//50 org.gnome.Sdk//50 \
+            org.freedesktop.Sdk.Extension.rust-stable//25.08 \
+            org.freedesktop.Sdk.Extension.node22//25.08 \
+            org.flatpak.Builder
+          df -h / | tail -1
+
+      - name: Manifeste et sources
+        run: scripts/flathub.sh build-flathub --local
+
+      # Comme sur Flathub : sources téléchargées d'abord, puis compilation sans réseau
+      # (le manifeste ne demande pas --share=network). flatpak-builder d'Ubuntu : celui
+      # de l'application org.flatpak.Builder ne voit pas le SDK installé pour l'utilisateur.
+      - name: Compilation hors ligne
+        run: |
+          set -o pipefail
+          flatpak-builder --user --force-clean --disable-rofiles-fuse --repo=repo \
+            --state-dir="$RUNNER_TEMP/flatpak-builder" \
+            build-dir build-flathub/dev.memepas.quayline.yml 2>&1 | grep -v '^Downloading\|^Fetching' | tail -n 300
+          df -h / | tail -1
+
+      - name: flatpak-builder-lint
+        run: |
+          lint() { flatpak run --command=flatpak-builder-lint org.flatpak.Builder "$@"; }
+          status=0
+          echo "::group::manifeste"; lint --exceptions manifest build-flathub/dev.memepas.quayline.yml || status=1; echo "::endgroup::"
+          echo "::group::dépôt"; lint --exceptions repo repo || status=1; echo "::endgroup::"
+          exit $status
+
+      - name: Paquet d'essai
+        if: always()
+        run: flatpak build-bundle repo quayline-flathub.flatpak dev.memepas.quayline 2>/dev/null || true
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: quayline-flathub
+          path: |
+            quayline-flathub.flatpak
+            build-flathub/dev.memepas.quayline.yml
+          if-no-files-found: ignore
+          retention-days: 7

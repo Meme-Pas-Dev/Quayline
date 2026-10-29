@@ -5,3 +5,4 @@
 *.tvlt
 .DS_Store
 /build-info
+build-flathub/

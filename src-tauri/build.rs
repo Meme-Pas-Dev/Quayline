@@ -56,6 +56,14 @@ fn build_info() {
 }
 
 fn main() {
+    // Version d'une boutique (Flathub) : QUAYLINE_UPDATES=store dans son manifeste
+    // désactive la recherche de mise à jour (identity::UPDATES_BY_STORE).
+    println!("cargo:rustc-check-cfg=cfg(updates_by_store)");
+    println!("cargo:rerun-if-env-changed=QUAYLINE_UPDATES");
+    if std::env::var("QUAYLINE_UPDATES").as_deref() == Ok("store") {
+        println!("cargo:rustc-cfg=updates_by_store");
+    }
+
     identity();
     build_info();
     // Déclarer explicitement les commandes : chacune doit alors être autorisée

@@ -14,6 +14,11 @@ pub const REPOSITORY: &str = env!("APP_REPOSITORY");
 pub const BUILD: &str = env!("APP_BUILD");
 pub const COMMIT: &str = env!("APP_COMMIT");
 
+/// Mises à jour livrées par une boutique (Flathub : `QUAYLINE_UPDATES=store` à la
+/// compilation, dans son manifeste) : pas de recherche de nouvelle version. Les autres
+/// builds, Flatpak des releases compris, gardent la recherche.
+pub const UPDATES_BY_STORE: bool = cfg!(updates_by_store);
+
 /// Lancé depuis un Flatpak ?
 pub fn is_flatpak() -> bool {
     std::env::var_os("FLATPAK_ID").is_some()

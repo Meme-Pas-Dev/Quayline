@@ -9,6 +9,7 @@
   import Terminal from "../components/Terminal.svelte";
   import {
     closeSession,
+    caps,
     data,
     disconnectSession,
     handleError,
@@ -95,9 +96,9 @@
   // Recherche de mise à jour une fois les réglages du coffre lus ; la première fois,
   // l'utilisateur choisit (rien n'est envoyé à GitHub avant sa réponse).
   $effect(() => {
-    if (data.settings?.check_updates) autoCheckForUpdate();
+    if (data.settings?.check_updates && !caps.updatesByStore) autoCheckForUpdate();
   });
-  let askUpdates = $derived(data.loaded && data.settings?.check_updates === null);
+  let askUpdates = $derived(data.loaded && data.settings?.check_updates === null && !caps.updatesByStore);
 
   async function answerUpdates(enabled: boolean) {
     if (!data.settings) return;
