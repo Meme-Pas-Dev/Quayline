@@ -42,7 +42,7 @@
   let remotePane = $state<FilePane>();
 
   let conflict = $state<{ direction: "upload" | "download"; paths: string[]; names: string[]; destination: string } | null>(null);
-  let properties = $state<{ side: Side; entry: FileEntry } | null>(null);
+  let properties = $state<{ side: Side; entries: FileEntry[] } | null>(null);
   let editing = $state<FileEntry | null>(null);
 
   const host = $derived(data.hosts.find((h) => h.id === tab.hostId));
@@ -114,15 +114,25 @@
     await refresh();
   }
 
-  function transfer(direction: "upload" | "download", paths: string[]) {
+  /** `destination` : sous-dossier visé par un dépôt, sinon le dossier affiché. */
+  async function transfer(direction: "upload" | "download", paths: string[], destination?: string) {
     if (!ready || !paths.length) return;
     const dest = direction === "upload" ? remote : local;
-    const existing = new Set(dest.entries.map((e) => e.name));
+    const target = destination ?? dest.path;
+    // Noms déjà présents à l'arrivée : liste affichée, ou relue pour un sous-dossier
+    // (à défaut, le transfert sans remplacement saute les éléments existants).
+    let existing = new Set<string>();
+    try {
+      const list = target === dest.path ? dest.entries : direction === "upload" ? await api.sftpList(sftpId!, target) : await api.localList(target);
+      existing = new Set(list.map((e) => e.name));
+    } catch {
+      // Liste illisible : pas de question, rien n'est remplacé.
+    }
     // Envoi : chemins locaux (style Windows sous Windows) ; réception : chemins du serveur.
     const style = direction === "upload" && IS_WINDOWS ? "windows" : "unix";
     const names = paths.map((p) => baseName(p, style)).filter((n) => existing.has(n));
-    if (names.length) conflict = { direction, paths, names, destination: dest.path };
-    else start(direction, paths, dest.path, false);
+    if (names.length) conflict = { direction, paths, names, destination: target };
+    else start(direction, paths, target, false);
   }
 
   async function start(direction: "upload" | "download", paths: string[], destination: string, overwrite: boolean) {
@@ -247,8 +257,9 @@
       ondelete={(entries) =>
         run(() => api.localTrash(entries.map((e) => e.path)), () => loadLocal(), t("sftp.movedToTrash"))}
       onsend={(entries) => transfer("upload", entries.map((e) => e.path))}
-      ondrop={(paths) => transfer("download", paths)}
-      onproperties={(entry) => (properties = { side: "local", entry })}
+      ondrop={(paths, _from, destination) => transfer("download", paths, destination)}
+      onproperties={(entries) => (properties = { side: "local", entries })}
+      onmove={(paths, destination) => run(() => api.localMove(paths, destination), () => loadLocal())}
     />
 
     {#if ready || remote.entries.length}
@@ -271,8 +282,9 @@
         ondelete={(entries) =>
           run(() => api.sftpDelete(sftpId!, entries.map((e) => e.path)), () => loadRemote(), t("sftp.deleted"))}
         onsend={(entries) => transfer("download", entries.map((e) => e.path))}
-        ondrop={(paths) => transfer("upload", paths)}
-        onproperties={(entry) => (properties = { side: "remote", entry })}
+        ondrop={(paths, _from, destination) => transfer("upload", paths, destination)}
+        onproperties={(entries) => (properties = { side: "remote", entries })}
+        onmove={(paths, destination) => run(() => api.sftpMove(sftpId!, paths, destination), () => loadRemote())}
         onedit={(entry) => (editing = entry)}
         onopenexternal={(entry) => sftpId && openExternal(sftpId, entry.path)}
       />
@@ -333,15 +345,21 @@
 {#if visible && properties}
   {@const p = properties}
   <PropertiesDialog
-    entry={p.entry}
-    load={() => (p.side === "remote" ? api.sftpStat(sftpId!, p.entry.path) : api.localStat(p.entry.path))}
+    entries={p.entries}
+    load={() => Promise.all(p.entries.map((e) => (p.side === "remote" ? api.sftpStat(sftpId!, e.path) : api.localStat(e.path))))}
     canChmod={p.side === "remote" ? ready : !IS_WINDOWS}
-    onchmod={async (mode) => {
-      if (p.side === "remote") await api.sftpChmod(sftpId!, p.entry.path, mode);
-      else await api.localChmod(p.entry.path, mode);
-      toast(t("props.applied"), "success");
-      if (p.side === "remote") loadRemote();
-      else loadLocal();
+    onchmod={async (changes) => {
+      // Un élément après l'autre ; à la première erreur, les suivants sont laissés tels quels.
+      try {
+        for (const { entry, mode } of changes) {
+          if (p.side === "remote") await api.sftpChmod(sftpId!, entry.path, mode);
+          else await api.localChmod(entry.path, mode);
+        }
+        toast(t("props.applied"), "success");
+      } finally {
+        if (p.side === "remote") loadRemote();
+        else loadLocal();
+      }
     }}
     onclose={() => (properties = null)}
   />

@@ -381,6 +381,8 @@ export const api = {
   sftpMkdir: (sftpId: string, dir: string, name: string) => invoke<void>("sftp_mkdir", { sftpId, dir, name }),
   sftpRename: (sftpId: string, path: string, newName: string) =>
     invoke<void>("sftp_rename", { sftpId, path, newName }),
+  sftpMove: (sftpId: string, paths: string[], destination: string) =>
+    invoke<void>("sftp_move", { sftpId, paths, destination }),
   sftpDelete: (sftpId: string, paths: string[]) => invoke<void>("sftp_delete", { sftpId, paths }),
   sftpUpload: (sftpId: string, localPaths: string[], remoteDir: string, overwrite: boolean) =>
     invoke<string[]>("sftp_upload", { sftpId, localPaths, remoteDir, overwrite }),
@@ -391,6 +393,7 @@ export const api = {
   localRealpath: (path: string) => invoke<string>("local_realpath", { path }),
   localMkdir: (dir: string, name: string) => invoke<void>("local_mkdir", { dir, name }),
   localRename: (path: string, newName: string) => invoke<void>("local_rename", { path, newName }),
+  localMove: (paths: string[], destination: string) => invoke<void>("local_move", { paths, destination }),
   localTrash: (paths: string[]) => invoke<void>("local_trash", { paths }),
   sftpStat: (sftpId: string, path: string) => invoke<FileEntry>("sftp_stat", { sftpId, path }),
   sftpChmod: (sftpId: string, path: string, mode: number) => invoke<void>("sftp_chmod", { sftpId, path, mode }),

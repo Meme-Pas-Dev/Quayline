@@ -5,6 +5,7 @@
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import Icon, { type IconName } from "./Icon.svelte";
   import PromptDialog from "./PromptDialog.svelte";
+  import Modal from "./Modal.svelte";
   import { IS_WINDOWS } from "../platform";
   import { crumbsOf, parentOf as parentPath, type PathStyle } from "../paths";
   import { DRAG_THRESHOLD, fileDrag } from "../fileDrag.svelte";
@@ -30,6 +31,7 @@
     onsend,
     ondrop,
     onproperties,
+    onmove,
     onedit,
     onopenexternal,
   }: {
@@ -50,8 +52,10 @@
     ondelete: (entries: FileEntry[]) => void;
     onsend: (entries: FileEntry[]) => void;
     /** Fichiers lâchés depuis l'autre panneau. */
-    ondrop: (paths: string[], from: Side) => void;
-    onproperties?: (entry: FileEntry) => void;
+    ondrop: (paths: string[], from: Side, destination?: string) => void;
+    onproperties?: (entries: FileEntry[]) => void;
+    /** Déplacement dans ce panneau, vers un sous-dossier ou le dossier parent. */
+    onmove?: (paths: string[], destination: string) => void;
     /** Fichier distant : éditeur intégré, ou application par défaut du système. */
     onedit?: (entry: FileEntry) => void;
     onopenexternal?: (entry: FileEntry) => void;
@@ -84,11 +88,18 @@
   let editingPath = $state(false);
   let dropActive = $state(false);
   // x, y : position affichée ; cx, cy : curseur au clic droit.
-  let menu = $state<{ x: number; y: number; cx: number; cy: number; entry: FileEntry } | null>(null);
+  // entry : élément cliqué ; null pour un clic droit hors des lignes (dossier courant).
+  let menu = $state<{ x: number; y: number; cx: number; cy: number; entry: FileEntry | null } | null>(null);
   let menuEl = $state<HTMLDivElement>();
   let dialog = $state<
-    { kind: "mkdir" } | { kind: "rename"; entry: FileEntry } | { kind: "delete"; entries: FileEntry[] } | null
+    | { kind: "mkdir" }
+    | { kind: "rename"; entry: FileEntry }
+    | { kind: "delete"; entries: FileEntry[] }
+    | { kind: "move"; entries: FileEntry[] }
+    | null
   >(null);
+  // Destination choisie dans « Déplacer vers… ».
+  let moveTarget = $state("");
   let paneEl: HTMLDivElement;
 
   // Tri par colonne (clic sur l'en-tête ; second clic : ordre inverse). Dossiers
@@ -157,6 +168,11 @@
   const crumbs = $derived(crumbsOf(path, style, t("files.thisPc")));
 
   function select(entry: FileEntry, e: MouseEvent) {
+    // Fin d'un balayage ou d'un glisser relâché sur une ligne : la sélection reste.
+    if (gestured) {
+      gestured = false;
+      return;
+    }
     const next = new Set(e.ctrlKey || e.metaKey ? selected : []);
     if (e.shiftKey && anchor) {
       const a = visible.findIndex((x) => x.path === anchor);
@@ -184,6 +200,27 @@
       anchor = entry.path;
     }
     menu = { x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY, entry };
+  }
+
+  // Clic dans la liste, hors des lignes : plus rien de sélectionné (sauf fin d'un
+  // balayage ou d'un glisser relâché là).
+  function onbodyclick(e: MouseEvent) {
+    if ((e.target as HTMLElement).closest(".row")) return;
+    if (gestured) {
+      gestured = false;
+      return;
+    }
+    selected = new Set();
+    anchor = null;
+  }
+
+  // Clic droit dans la liste, hors des lignes : menu du dossier courant.
+  function onbodycontext(e: MouseEvent) {
+    if ((e.target as HTMLElement).closest(".row")) return;
+    e.preventDefault();
+    selected = new Set();
+    anchor = null;
+    menu = { x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY, entry: null };
   }
 
   // Garde le menu entier dans la fenêtre : à gauche ou au-dessus du curseur s'il
@@ -225,13 +262,35 @@
     }
   }
 
-  // ── Glisser vers l'autre panneau (voir fileDrag.svelte.ts) ──
+  // ── Appui maintenu sur une ligne (voir fileDrag.svelte.ts) ──
+  // Au-delà de quelques pixels : sur une ligne déjà sélectionnée, glisser de la
+  // sélection (vers un dossier ou l'autre panneau) ; sur une autre ligne, balayage :
+  // les lignes survolées s'ajoutent à la sélection (à la sélection existante avec Ctrl
+  // ou ⌘).
 
-  // Appui sur une ligne : devient un glisser au-delà de quelques pixels.
-  let pressed: { entry: FileEntry; x: number; y: number } | null = null;
+  let pressed: { entry: FileEntry; x: number; y: number; add: boolean } | null = null;
+  let sweep: { start: string; base: Set<string> } | null = null;
+  let gestured = false;
 
   function onrowpointerdown(entry: FileEntry, e: PointerEvent) {
-    if (e.button === 0 && !e.shiftKey && !e.ctrlKey && !e.metaKey) pressed = { entry, x: e.clientX, y: e.clientY };
+    gestured = false;
+    if (e.button === 0 && !e.shiftKey) pressed = { entry, x: e.clientX, y: e.clientY, add: e.ctrlKey || e.metaKey };
+  }
+
+  function sweepTo(entry: FileEntry) {
+    if (!sweep) return;
+    const a = visible.findIndex((x) => x.path === sweep!.start);
+    const b = visible.findIndex((x) => x.path === entry.path);
+    if (a < 0 || b < 0) return;
+    const next = new Set(sweep.base);
+    for (const x of visible.slice(Math.min(a, b), Math.max(a, b) + 1)) next.add(x.path);
+    selected = next;
+    gestured = true;
+  }
+
+  function onrowpointerenter(entry: FileEntry) {
+    if (sweep) sweepTo(entry);
+    else dropRow = canDropOn(entry) ? entry.path : null;
   }
 
   function onwindowpointermove(e: PointerEvent) {
@@ -241,26 +300,72 @@
       return;
     }
     if (!pressed || Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) < DRAG_THRESHOLD) return;
-    const { entry } = pressed;
+    const { entry, add } = pressed;
     pressed = null;
-    if (!selected.has(entry.path)) {
-      selected = new Set([entry.path]);
+    if (add || !selected.has(entry.path)) {
+      sweep = { start: entry.path, base: add ? new Set(selected) : new Set() };
       anchor = entry.path;
+      sweepTo(entry);
+      return;
     }
     const paths = visible.filter((x) => selected.has(x.path)).map((x) => x.path);
+    gestured = true;
     Object.assign(fileDrag, { side, paths, x: e.clientX, y: e.clientY });
   }
 
   // Relâché : le panneau d'arrivée (gestionnaire sur le panneau, appelé avant celui de
   // la fenêtre) lance le transfert ; le panneau d'origine termine le glisser.
   function onpanepointerup() {
-    if (fileDrag.side && fileDrag.side !== side && fileDrag.paths.length) ondrop([...fileDrag.paths], fileDrag.side);
+    if (droppedOnRow) droppedOnRow = false;
+    else if (fileDrag.side && fileDrag.side !== side && fileDrag.paths.length) ondrop([...fileDrag.paths], fileDrag.side);
     dropActive = false;
   }
 
   function onwindowpointerup() {
     pressed = null;
+    sweep = null;
+    dropRow = null;
     if (fileDrag.side === side) Object.assign(fileDrag, { side: null, paths: [] });
+  }
+
+  // ── Glisser sur un dossier : déplacement (même panneau) ou transfert dans ce
+  // dossier (depuis l'autre panneau) ──
+
+  let dropRow = $state<string | null>(null);
+  // Dépôt traité par la ligne : le panneau ne transfère pas aussi vers le dossier affiché.
+  let droppedOnRow = false;
+
+  function canDropOn(entry: FileEntry) {
+    if (!fileDrag.side || !entry.isDir) return false;
+    return fileDrag.side === side ? !!onmove && !fileDrag.paths.includes(entry.path) : true;
+  }
+
+  function onrowpointerup(entry: FileEntry) {
+    if (dropRow === entry.path && canDropOn(entry)) {
+      const paths = [...fileDrag.paths];
+      if (fileDrag.side === side) onmove!(paths, entry.path);
+      else {
+        ondrop(paths, fileDrag.side!, entry.path);
+        droppedOnRow = true;
+      }
+    }
+    dropRow = null;
+  }
+
+  // Destinations de « Déplacer vers… » : dossier parent, puis sous-dossiers affichés
+  // (hors éléments déplacés).
+  function moveTargets(moving: FileEntry[]) {
+    const parent = parentOf(path);
+    const skip = new Set(moving.map((e) => e.path));
+    return [
+      ...(parent && parent !== path ? [{ path: parent, label: t("files.parentFolder") }] : []),
+      ...visible.filter((e) => e.isDir && !skip.has(e.path)).map((e) => ({ path: e.path, label: displayName(e.name) })),
+    ];
+  }
+
+  function openMove(entries: FileEntry[]) {
+    moveTarget = moveTargets(entries)[0]?.path ?? "";
+    dialog = { kind: "move", entries };
   }
 
   function onpanepointermove() {
@@ -305,7 +410,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
   class="pane"
-  class:drop={dropActive}
+  class:drop={dropActive && !dropRow}
   bind:this={paneEl}
   tabindex="0"
   role="region"
@@ -410,7 +515,11 @@
         </span>
       {/each}
     </div>
-    <div class="tbody" role="rowgroup">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="tbody" role="rowgroup" onclick={onbodyclick}
+      onpointerdown={(e) => !(e.target as HTMLElement).closest(".row") && (gestured = false)}
+      oncontextmenu={onbodycontext}>
       {#if error}
         <div class="state error" role="row"><span class="state-cell" role="gridcell"><Icon name="alert" size={18} /> {error}</span></div>
       {:else if loading && entries.length === 0}
@@ -426,6 +535,7 @@
           class="row"
           class:selected={selected.has(entry.path)}
           class:hidden-file={entry.name.startsWith(".")}
+          class:drop-into={dropRow === entry.path}
           role="row"
           aria-selected={selected.has(entry.path)}
           tabindex="-1"
@@ -433,6 +543,9 @@
           ondblclick={() => open(entry)}
           oncontextmenu={(e) => onrowcontext(entry, e)}
           onpointerdown={(e) => onrowpointerdown(entry, e)}
+          onpointerenter={() => onrowpointerenter(entry)}
+          onpointerleave={() => dropRow === entry.path && (dropRow = null)}
+          onpointerup={() => onrowpointerup(entry)}
         >
           <span class="name" role="gridcell">
             <span class="ficon" class:dir={entry.isDir}><Icon name={iconFor(entry)} size={16} /></span>
@@ -465,27 +578,39 @@
   </footer>
 
   {#if menu}
+    {@const entry = menu.entry}
     <div class="menu" bind:this={menuEl} style:left="{menu.x}px" style:top="{menu.y}px" role="menu">
-      {#if selection.length === 1 && menu.entry.isDir}
-        <button onclick={() => onnavigate(menu!.entry.path)}><Icon name="folder" size={15} /> {t("files.open")}</button>
+      {#if entry}
+        {#if selection.length === 1 && entry.isDir}
+          <button onclick={() => onnavigate(entry.path)}><Icon name="folder" size={15} /> {t("files.open")}</button>
+        {/if}
+        <button onclick={() => onsend(selection)}><Icon name={sendIcon} size={15} /> {sendLabel}</button>
+        {#if selection.length === 1 && !entry.isDir && onedit}
+          <button onclick={() => onedit(entry)}><Icon name="edit" size={15} /> {t("files.editFile")}</button>
+        {/if}
+        {#if selection.length === 1 && !entry.isDir && onopenexternal}
+          <button onclick={() => onopenexternal(entry)}><Icon name="external" size={15} /> {t("files.openWith")}</button>
+        {/if}
+        {#if selection.length === 1}
+          <button onclick={() => (dialog = { kind: "rename", entry })}><Icon name="edit" size={15} /> {t("files.rename")}</button>
+        {/if}
+        {#if onmove}
+          <button onclick={() => openMove(selection)}><Icon name="folder" size={15} /> {t("files.moveTo")}</button>
+        {/if}
+        {#if onproperties}
+          <button onclick={() => onproperties(selection)}><Icon name="info" size={15} /> {t("files.properties")}</button>
+        {/if}
+        <button class="danger" onclick={() => (dialog = { kind: "delete", entries: selection })}>
+          <Icon name="trash" size={15} />
+          {side === "local" ? t("files.moveToTrash") : t("common.delete")}
+        </button>
+      {:else}
+        <button onclick={() => (dialog = { kind: "mkdir" })}><Icon name="folderPlus" size={15} /> {t("files.newFolder")}</button>
+        <button onclick={onrefresh}><Icon name="refresh" size={15} /> {t("files.refresh")}</button>
+        {#if visible.length}
+          <button onclick={() => (selected = new Set(visible.map((x) => x.path)))}><Icon name="check" size={15} /> {t("files.selectAll")}</button>
+        {/if}
       {/if}
-      <button onclick={() => onsend(selection)}><Icon name={sendIcon} size={15} /> {sendLabel}</button>
-      {#if selection.length === 1 && !menu.entry.isDir && onedit}
-        <button onclick={() => onedit(menu!.entry)}><Icon name="edit" size={15} /> {t("files.editFile")}</button>
-      {/if}
-      {#if selection.length === 1 && !menu.entry.isDir && onopenexternal}
-        <button onclick={() => onopenexternal(menu!.entry)}><Icon name="external" size={15} /> {t("files.openWith")}</button>
-      {/if}
-      {#if selection.length === 1}
-        <button onclick={() => (dialog = { kind: "rename", entry: menu!.entry })}><Icon name="edit" size={15} /> {t("files.rename")}</button>
-      {/if}
-      {#if selection.length === 1 && onproperties}
-        <button onclick={() => onproperties(menu!.entry)}><Icon name="info" size={15} /> {t("files.properties")}</button>
-      {/if}
-      <button class="danger" onclick={() => (dialog = { kind: "delete", entries: selection })}>
-        <Icon name="trash" size={15} />
-        {side === "local" ? t("files.moveToTrash") : t("common.delete")}
-      </button>
     </div>
   {/if}
 </div>
@@ -515,6 +640,33 @@
     }}
     onclose={() => (dialog = null)}
   />
+{:else if dialog?.kind === "move"}
+  {@const list = dialog.entries}
+  {@const targets = moveTargets(list)}
+  <Modal title={t("files.moveTo")} onclose={() => (dialog = null)} width={420}>
+    <p class="move-what">{list.length === 1 ? displayName(list[0].name) : tn("files.selected", list.length)}</p>
+    {#if targets.length}
+      <label class="field">
+        <span>{t("files.destination")}</span>
+        <select class="input" bind:value={moveTarget}>
+          {#each targets as d (d.path)}<option value={d.path}>{d.label}</option>{/each}
+        </select>
+      </label>
+    {:else}
+      <p class="muted">{t("files.noSubfolder")}</p>
+    {/if}
+    {#snippet footer()}
+      <button class="btn" onclick={() => (dialog = null)}>{t("common.cancel")}</button>
+      <button
+        class="btn primary"
+        disabled={!moveTarget}
+        onclick={() => {
+          onmove?.(list.map((e) => e.path), moveTarget);
+          dialog = null;
+        }}>{t("files.move")}</button
+      >
+    {/snippet}
+  </Modal>
 {:else if dialog?.kind === "delete"}
   {@const list = dialog.entries}
   <ConfirmDialog
@@ -733,6 +885,15 @@
   }
   .row.selected {
     background: var(--accent-soft);
+  }
+  .row.drop-into {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1.5px var(--accent);
+  }
+  .move-what {
+    margin: 0 0 12px;
+    font-size: 13px;
+    word-break: break-all;
   }
   .row.hidden-file .label {
     opacity: 0.6;

@@ -5,15 +5,19 @@
   import { languageOf, loadLanguage } from "../editorLanguages";
   import { displayName } from "../format";
   import { IS_MAC } from "../platform";
+  import { display, setEditorWrap } from "../display.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import Modal from "./Modal.svelte";
   import { toast } from "./toast.svelte";
   import type { EditorView } from "@codemirror/view";
+  import type { Compartment, Extension } from "@codemirror/state";
 
   let { sftpId, path, name, onclose }: { sftpId: string; path: string; name: string; onclose: () => void } = $props();
 
   let host: HTMLDivElement;
   let view: EditorView | null = null;
+  // Retour à la ligne, modifiable sans recréer l'éditeur.
+  let wrap: { compartment: Compartment; on: Extension } | null = null;
   let ready = $state(false);
   let version: RemoteVersion | null = null;
   let encoding = $state<TextEncoding | null>(null);
@@ -33,7 +37,7 @@
     (async () => {
       try {
         // Chargé à la demande : l'éditeur n'alourdit pas le démarrage.
-        const [{ basicSetup }, { EditorView: View, keymap }, { EditorState }, { HighlightStyle, syntaxHighlighting }, { tags }, lang, text] =
+        const [{ basicSetup }, { EditorView: View, keymap }, { EditorState, Compartment }, { HighlightStyle, syntaxHighlighting }, { tags }, lang, text] =
           await Promise.all([
             import("codemirror"),
             import("@codemirror/view"),
@@ -65,6 +69,7 @@
         // Fins de ligne Windows conservées à l'enregistrement (sliceDoc les reprend).
         const crlf = text.content.includes("\r\n");
         saved = text.content;
+        wrap = { compartment: new Compartment(), on: View.lineWrapping };
         view = new View({
           parent: host,
           state: EditorState.create({
@@ -75,6 +80,7 @@
               // doit le reprendre pour que ses styles ne soient pas bloqués.
               ...(styleNonce() ? [View.cspNonce.of(styleNonce()!)] : []),
               syntaxHighlighting(highlight),
+              wrap.compartment.of(display.editorWrap ? wrap.on : []),
               // Nom accessible de la zone de saisie (lecteurs d'écran), atteignable au clavier.
               View.contentAttributes.of({ "aria-label": t("editor.contentLabel", { name: path.split("/").pop() ?? path }), tabindex: "0" }),
               ...(lang ? [lang] : []),
@@ -127,6 +133,11 @@
     }
   }
 
+  function toggleWrap(value: boolean) {
+    setEditorWrap(value);
+    if (view && wrap) view.dispatch({ effects: wrap.compartment.reconfigure(value ? wrap.on : []) });
+  }
+
   function styleNonce(): string | null {
     return document.querySelector<HTMLStyleElement>("style[nonce]")?.nonce || null;
   }
@@ -152,6 +163,10 @@
     <span class="hint faint">
       {#if encoding}{encodingLabel(encoding)}{language ? ` · ${language}` : ""}{/if}{dirty ? ` · ${t("editor.unsaved")}` : ""}
     </span>
+    <label class="wrap">
+      <input type="checkbox" checked={display.editorWrap} onchange={(e) => toggleWrap(e.currentTarget.checked)} />
+      {t("editor.wrap")}
+    </label>
     <button class="btn" onclick={requestClose}>{t("common.close")}</button>
     <button class="btn primary" onclick={() => save(false)} disabled={!ready || !dirty || saving} title={IS_MAC ? "⌘S" : "Ctrl+S"}>
       {t(saving ? "editor.saving" : "editor.save")}
@@ -195,5 +210,15 @@
   .hint {
     margin-right: auto;
     font-size: 12.5px;
+  }
+  .wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
   }
 </style>

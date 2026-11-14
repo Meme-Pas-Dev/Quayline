@@ -33,13 +33,20 @@ use crate::state::AppState;
 const CHUNK: usize = 256 * 1024;
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(150);
 const PARALLEL_TRANSFERS: usize = 3;
+/// Surveillance de la connexion : fermeture constatée à chaque tour, aller-retour
+/// (ping) régulier pour les coupures silencieuses (réseau perdu, mise en veille). Le
+/// délai de réponse est large : pendant un téléchargement sur une ligne lente, la
+/// réponse attend derrière les données déjà envoyées par le serveur.
+const WATCH_INTERVAL: Duration = Duration::from_secs(2);
+const PING_INTERVAL: Duration = Duration::from_secs(15);
+const PING_TIMEOUT: Duration = Duration::from_secs(30);
 
 // ───────────────────────────── État ─────────────────────────────
 
 struct Conn {
     sftp: Arc<SftpSession>,
     // Garde la connexion SSH ouverte tant que l'explorateur existe.
-    _ssh: Arc<client::Handle<HostKeyVerifier>>,
+    ssh: Arc<client::Handle<HostKeyVerifier>>,
     limiter: Arc<Semaphore>,
 }
 
@@ -57,11 +64,19 @@ impl SftpManager {
     pub(crate) fn get(&self, id: Uuid) -> CmdResult<(Arc<SftpSession>, Arc<Semaphore>)> {
         let conns = self.conns.lock().unwrap_or_else(|p| p.into_inner());
         let c = conns.get(&id).ok_or_else(|| CmdError::new("no_session", tr!("err.sftp.closed")))?;
+        if c.ssh.is_closed() {
+            return Err(CmdError::new("no_session", tr!("err.sftp.connectionLost")));
+        }
         Ok((c.sftp.clone(), c.limiter.clone()))
     }
 
-    pub fn close(&self, id: Uuid) {
-        self.conns.lock().unwrap_or_else(|p| p.into_inner()).remove(&id);
+    /// Vrai si la connexion était encore ouverte.
+    pub fn close(&self, id: Uuid) -> bool {
+        self.conns.lock().unwrap_or_else(|p| p.into_inner()).remove(&id).is_some()
+    }
+
+    fn is_open(&self, id: Uuid) -> bool {
+        self.conns.lock().unwrap_or_else(|p| p.into_inner()).contains_key(&id)
     }
 
     /// Verrouillage : ferme les connexions et annule les transferts.
@@ -204,21 +219,31 @@ pub fn sftp_open(app: AppHandle, host_id: Uuid, events: Channel<SessionEvent>) -
         let asker = Asker::new(&app, &events);
         match connect(&asker, target).await {
             Ok((sftp, ssh_handle, home)) => {
-                let manager = app.state::<SftpManager>();
-                let mut conns = manager.conns.lock().unwrap_or_else(|p| p.into_inner());
-                if manager.lock_generation.load(Ordering::Acquire) != generation {
-                    drop(conns);
+                let ssh = Arc::new(ssh_handle);
+                let registered = {
+                    let manager = app.state::<SftpManager>();
+                    let mut conns = manager.conns.lock().unwrap_or_else(|p| p.into_inner());
+                    let current = manager.lock_generation.load(Ordering::Acquire) == generation;
+                    if current {
+                        let limiter = Arc::new(Semaphore::new(PARALLEL_TRANSFERS));
+                        conns.insert(id, Conn { sftp: Arc::new(sftp), ssh: ssh.clone(), limiter });
+                    }
+                    current
+                };
+                if !registered {
                     let _ = events.send(SessionEvent::Closed {
                         error: Some(tr!("err.sftp.lockedAbort")),
                     });
                     return;
                 }
-                conns.insert(
-                    id,
-                    Conn { sftp: Arc::new(sftp), _ssh: Arc::new(ssh_handle), limiter: Arc::new(Semaphore::new(PARALLEL_TRANSFERS)) },
-                );
-                drop(conns);
                 let _ = events.send(SessionEvent::SftpReady { home });
+                watch(&app, id, &ssh).await;
+                // Connexion perdue alors que l'explorateur était ouvert : fermée ici, et
+                // l'interface propose de se reconnecter, comme pour un terminal.
+                if app.state::<SftpManager>().close(id) {
+                    app.state::<crate::sftp_edit::EditManager>().stop_session(id);
+                    let _ = events.send(SessionEvent::Closed { error: Some(tr!("err.sftp.connectionLost")) });
+                }
             }
             Err(error) => {
                 let _ = events.send(SessionEvent::Closed { error: Some(error) });
@@ -226,6 +251,24 @@ pub fn sftp_open(app: AppHandle, host_id: Uuid, events: Channel<SessionEvent>) -
         }
     });
     Ok(id)
+}
+
+/// Rend la main quand la connexion est perdue, ou quand l'explorateur a été fermé
+/// (onglet, déconnexion, verrouillage).
+async fn watch(app: &AppHandle, id: Uuid, ssh: &client::Handle<HostKeyVerifier>) {
+    let mut last_ping = Instant::now();
+    loop {
+        tokio::time::sleep(WATCH_INTERVAL).await;
+        if !app.state::<SftpManager>().is_open(id) || ssh.is_closed() {
+            return;
+        }
+        if last_ping.elapsed() >= PING_INTERVAL {
+            if !matches!(tokio::time::timeout(PING_TIMEOUT, ssh.send_ping()).await, Ok(Ok(()))) {
+                return;
+            }
+            last_ping = Instant::now();
+        }
+    }
 }
 
 async fn connect(
@@ -337,6 +380,39 @@ pub async fn sftp_rename(
     let (sftp, _) = mgr.get(sftp_id)?;
     let parent = path.trim_end_matches('/').rsplit_once('/').map(|(p, _)| if p.is_empty() { "/" } else { p }).unwrap_or(".");
     sftp.rename(path.clone(), join_remote(parent, &new_name)).await.map_err(sftp_err)
+}
+
+/// Déplacement vers un autre dossier du serveur (glisser sur un dossier, « Déplacer
+/// vers… ») : renommage par le serveur, sans copie. Jamais par-dessus un élément
+/// existant ; arrêt au premier échec (les éléments déjà déplacés le restent).
+#[tauri::command]
+pub async fn sftp_move(
+    state: State<'_, AppState>,
+    mgr: State<'_, SftpManager>,
+    sftp_id: Uuid,
+    paths: Vec<String>,
+    destination: String,
+) -> CmdResult<()> {
+    state.require_unlocked()?;
+    let (sftp, _) = mgr.get(sftp_id)?;
+    let dest = sftp.canonicalize(destination).await.map_err(sftp_err)?;
+    for path in &paths {
+        let source = path.trim_end_matches('/');
+        let name = remote_basename(source);
+        validate_new_name(name)?;
+        if dest == source || dest.starts_with(&format!("{source}/")) {
+            return Err(CmdError::invalid(tr!("err.sftp.moveInside", name = crate::text::neutralize(name, 255))));
+        }
+        let target = join_remote(&dest, name);
+        if target == source {
+            continue;
+        }
+        if sftp.symlink_metadata(target.clone()).await.is_ok() {
+            return Err(CmdError::invalid(tr!("err.sftp.existsIn", name = crate::text::neutralize(name, 255))));
+        }
+        sftp.rename(source.to_string(), target).await.map_err(sftp_err)?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -610,6 +686,36 @@ pub fn local_rename(state: State<'_, AppState>, path: String, new_name: String) 
         return Err(CmdError::invalid(tr!("err.sftp.exists")));
     }
     std::fs::rename(&p, target).map_err(io_err)
+}
+
+/// Déplacement vers un autre dossier de l'ordinateur, mêmes règles que [`sftp_move`].
+#[tauri::command(async)]
+pub fn local_move(state: State<'_, AppState>, paths: Vec<String>, destination: String) -> CmdResult<()> {
+    state.require_unlocked()?;
+    move_local(&paths, Path::new(&destination))
+}
+
+fn move_local(paths: &[String], dest: &Path) -> CmdResult<()> {
+    if !dest.is_dir() {
+        return Err(CmdError::invalid(tr!("err.sftp.badPath")));
+    }
+    for path in paths {
+        let source = PathBuf::from(path);
+        let name = source.file_name().and_then(|n| n.to_str()).ok_or_else(|| CmdError::invalid(tr!("err.sftp.badName")))?;
+        // Comparaison par composants : « /a/b » ne commence pas par « /a/bc ».
+        if dest.starts_with(&source) {
+            return Err(CmdError::invalid(tr!("err.sftp.moveInside", name = name)));
+        }
+        let target = new_local_path(dest, name)?;
+        if target == source {
+            continue;
+        }
+        if target.symlink_metadata().is_ok() {
+            return Err(CmdError::invalid(tr!("err.sftp.existsIn", name = name)));
+        }
+        std::fs::rename(&source, &target).map_err(io_err)?;
+    }
+    Ok(())
 }
 
 /// Les fichiers locaux vont à la corbeille (récupérables), jamais supprimés définitivement.
@@ -1011,6 +1117,34 @@ async fn download_file(job: &mut Job, src: &str, dest: &Path, size: u64) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn move_local_into_subfolder() {
+        let root = std::env::temp_dir().join(format!("quayline-move-{}", Uuid::new_v4()));
+        let sub = root.join("sub");
+        std::fs::create_dir_all(sub.join("inner")).unwrap();
+        std::fs::write(root.join("a.txt"), "a").unwrap();
+        std::fs::write(root.join("b.txt"), "b").unwrap();
+        std::fs::write(sub.join("b.txt"), "déjà là").unwrap();
+        let s = |p: PathBuf| p.to_string_lossy().into_owned();
+
+        // Déplacement simple.
+        move_local(&[s(root.join("a.txt"))], &sub).unwrap();
+        assert!(!root.join("a.txt").exists() && sub.join("a.txt").exists());
+        // Jamais par-dessus un élément existant.
+        assert!(move_local(&[s(root.join("b.txt"))], &sub).is_err());
+        assert_eq!(std::fs::read_to_string(sub.join("b.txt")).unwrap(), "déjà là");
+        assert!(root.join("b.txt").exists());
+        // Un dossier ne va ni dans lui-même ni dans l'un de ses sous-dossiers.
+        assert!(move_local(&[s(sub.clone())], &sub).is_err());
+        assert!(move_local(&[s(sub.clone())], &sub.join("inner")).is_err());
+        // Vers le dossier parent.
+        move_local(&[s(sub.join("a.txt"))], &root).unwrap();
+        assert!(root.join("a.txt").exists());
+        // Destination absente.
+        assert!(move_local(&[s(root.join("a.txt"))], &root.join("absent")).is_err());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn download_limit_leaves_room_but_stays_bounded() {

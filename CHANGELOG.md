@@ -20,6 +20,67 @@ de texte à sa release GitHub.
 - Paquet Debian et Ubuntu (`.deb`, préversion) : Debian 12 ou plus récent, Ubuntu 22.04
   ou plus récent et leurs dérivées, joint à chaque release avec une empreinte signée.
 
+## [1.15.0] - 2026-11-14
+
+### English
+
+**Added**
+- Built-in editor: "Wrap lines" option for lines wider than the window, remembered.
+- File explorer: permissions of several selected items changed at once. A box that
+  differs between them is shown as mixed and, left as it is, keeps each item's value.
+- File explorer: right-clicking an empty part of a list opens a menu (new folder,
+  refresh, select all).
+- File explorer: selected items moved into a subfolder by dragging them onto it, or
+  with "Move to…" (subfolder or parent folder), on the computer and on the server.
+  Never over an existing item.
+- File explorer: items dropped on a folder of the other side are transferred into
+  that folder.
+- File explorer: holding the left button down on an unselected row and moving the
+  mouse selects the rows passed over (added to the selection with Ctrl or ⌘). A
+  selection is dragged from one of its rows. A click on an empty part of a list
+  clears the selection.
+
+**Fixed**
+- File explorer: a lost connection (closed by the server, network lost, computer
+  asleep) is detected; the explorer says so and offers to reconnect, as the terminal
+  does. Actions used to do nothing, without an error message.
+
+**Security**
+- russh 0.65.1 (RUSTSEC-2026-0495): the flaw is in russh's SSH agent server, which
+  Quayline does not use. async-executor 1.14.1 and crypto-bigint 0.7.11 (previous
+  versions withdrawn).
+
+### Français
+
+**Ajouté**
+- Éditeur intégré : option « Retour à la ligne » pour les lignes plus larges que la
+  fenêtre, mémorisée.
+- Explorateur de fichiers : permissions de plusieurs éléments sélectionnés modifiées en
+  une fois. Une case qui diffère entre eux est affichée comme mixte et, laissée telle
+  quelle, garde la valeur de chacun.
+- Explorateur de fichiers : un clic droit dans une partie vide d'une liste ouvre un
+  menu (nouveau dossier, actualiser, tout sélectionner).
+- Explorateur de fichiers : éléments sélectionnés déplacés dans un sous-dossier en les
+  glissant dessus, ou par « Déplacer vers… » (sous-dossier ou dossier parent), sur
+  l'ordinateur comme sur le serveur. Jamais par-dessus un élément existant.
+- Explorateur de fichiers : des éléments lâchés sur un dossier de l'autre côté sont
+  transférés dans ce dossier.
+- Explorateur de fichiers : bouton gauche maintenu sur une ligne non sélectionnée,
+  le déplacement de la souris sélectionne les lignes survolées (ajoutées à la
+  sélection avec Ctrl ou ⌘). Une sélection se glisse depuis l'une de ses lignes. Un
+  clic dans une partie vide d'une liste annule la sélection.
+
+**Corrigé**
+- Explorateur de fichiers : une connexion perdue (fermée par le serveur, réseau perdu,
+  ordinateur en veille) est détectée ; l'explorateur l'indique et propose de se
+  reconnecter, comme le terminal. Les actions restaient jusqu'ici sans effet, sans
+  message d'erreur.
+
+**Sécurité**
+- russh 0.65.1 (RUSTSEC-2026-0495) : la faille touche le serveur d'agent SSH de russh,
+  que Quayline n'utilise pas. async-executor 1.14.1 et crypto-bigint 0.7.11 (versions
+  précédentes retirées).
+
 ## [1.14.1] - 2026-10-25
 
 ### English

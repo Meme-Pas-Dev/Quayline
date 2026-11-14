@@ -42,10 +42,22 @@ function readOsc52(): boolean {
   }
 }
 
-export const display = $state<{ tiles: TileDensity; localTerm: boolean; osc52: boolean }>({
+const EDITOR_WRAP_KEY = "quayline.editor.wrap";
+
+/** Éditeur intégré : retour à la ligne des lignes trop longues, désactivé par défaut. */
+function readEditorWrap(): boolean {
+  try {
+    return localStorage.getItem(EDITOR_WRAP_KEY) === "on";
+  } catch {
+    return false;
+  }
+}
+
+export const display = $state<{ tiles: TileDensity; localTerm: boolean; osc52: boolean; editorWrap: boolean }>({
   tiles: read(),
   localTerm: readLocalTerm(),
   osc52: readOsc52(),
+  editorWrap: readEditorWrap(),
 });
 
 export function setTileDensity(value: TileDensity) {
@@ -73,6 +85,16 @@ export function setOsc52Enabled(value: boolean) {
   try {
     if (value) localStorage.removeItem(OSC52_KEY);
     else localStorage.setItem(OSC52_KEY, "off");
+  } catch {
+    // Non mémorisé, mais appliqué pour cette session.
+  }
+}
+
+export function setEditorWrap(value: boolean) {
+  display.editorWrap = value;
+  try {
+    if (value) localStorage.setItem(EDITOR_WRAP_KEY, "on");
+    else localStorage.removeItem(EDITOR_WRAP_KEY);
   } catch {
     // Non mémorisé, mais appliqué pour cette session.
   }
