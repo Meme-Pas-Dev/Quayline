@@ -20,6 +20,22 @@ de texte à sa release GitHub.
 - Paquet Debian et Ubuntu (`.deb`, préversion) : Debian 12 ou plus récent, Ubuntu 22.04
   ou plus récent et leurs dérivées, joint à chaque release avec une empreinte signée.
 
+## [1.15.1] - 2026-11-18
+
+### English
+
+**Security**
+- trash 5.4.0, which no longer uses chrono (no longer maintained, RUSTSEC-2026-0543).
+  chrono remains only through russh-sftp, for remote file dates, until it moves away
+  from it; the advisory reports no flaw.
+
+### Français
+
+**Sécurité**
+- trash 5.4.0, qui n'utilise plus chrono (plus maintenu, RUSTSEC-2026-0543). chrono
+  ne reste tiré que par russh-sftp, pour les dates des fichiers distants, en attendant
+  qu'il s'en passe ; l'avis ne signale aucune faille.
+
 ## [1.15.0] - 2026-11-14
 
 ### English
